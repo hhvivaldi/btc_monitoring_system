@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BTC Trading Decision</title>
+    <style>
+        body { font-family: sans-serif; line-height: 1.6; padding: 20px; max-width: 900px; margin: auto; background-color: #f4f4f4; }
+        .container { background-color: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1, h2 { color: #333; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 20px; }
+        .section { margin-bottom: 30px; padding: 20px; border: 1px solid #ddd; border-radius: 5px; background-color: #fdfdfd; }
+        .section h2 { border: none; margin-bottom: 15px; font-size: 1.2em; }
+        strong { color: #555; }
+        ul { list-style: none; padding: 0; }
+        li { margin-bottom: 8px; }
+        .signal { font-size: 1.5em; margin-right: 10px; }
+        .decision { font-size: 1.8em; font-weight: bold; text-align: center; padding: 20px; border-radius: 5px; margin-top: 10px; }
+        .BUY { background-color: #e7f7e7; color: #1d7c1d; border: 1px solid #b7e4b7; }
+        .SELL { background-color: #fde8e8; color: #a32121; border: 1px solid #f9c4c4; }
+        .HOLD { background-color: #fffbea; color: #b58105; border: 1px solid #fbe4a2; }
+        .unknown { background-color: #eee; color: #555; border: 1px solid #ccc; }
+        .explanation { margin-top: 15px; font-style: italic; color: #666; }
+        .chart-confirmed-yes { color: green; font-weight: bold; }
+        .chart-confirmed-no { color: orange; font-weight: bold; }
+        .footer { margin-top: 30px; text-align: center; font-size: 0.9em; color: #888; }
+        .error { color: red; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Bitcoin Trading Analysis</h1>
+        <p>Analysis generated at: {{ results.timestamp | default('N/A') }}</p>
+
+        <div class="section">
+            <h2>Market Signals</h2>
+            <ul>
+                {% for indicator, data in results.signals.items() %}
+                    {% if indicator != 'Overall' %}
+                    <li>
+                        <span class="signal">{{ data.signal | default('?') }}</span>
+                        <strong>{{ indicator }}:</strong> Trend: {{ data.trend | default('unknown') }}
+                        {% if data.price is not none %}
+                            , Price: {{ data.price | default('N/A') }}
+                        {% endif %}
+                    </li>
+                    {% endif %}
+                {% endfor %}
+            </ul>
+            <h3>Overall Market Sentiment: <span class="signal">{{ results.signals.Overall.signal | default('?') }}</span> {{ results.signals.Overall.trend | default('unknown') }} ({{ results.signals.Overall.price | default('N/A') }})</h3>
+        </div>
+
+        <div class="section">
+            <h2>Initial Decision (Based on Market Signals)</h2>
+            <p><strong>Decision:</strong> {{ results.initial_decision.decision | default('Error') }}</p>
+            <p><strong>Reason:</strong> {{ results.initial_decision.explanation | default('N/A') }}</p>
+        </div>
+
+        <div class="section">
+            <h2>BTC Chart Validation</h2>
+            {# {% if results.chart_validation %} #}
+                {# <p><strong>BTC Analysis Summary:</strong> {{ results.btc_analysis_summary | default('N/A') }}</p> #}
+                {# <p><strong>Chart Confirmed Initial Decision:</strong>
+                    <span class="{{ 'chart-confirmed-yes' if results.chart_validation.chart_confirmed else 'chart-confirmed-no' }}">
+                        {{ 'Yes' if results.chart_validation.chart_confirmed else 'No' }}
+                    </span>
+                </p> #}
+                {# <p><strong>Chart Analysis Details:</strong> {{ results.chart_validation.chart_explanation | default('N/A') }}</p> #}
+                {# <p><strong>Validation Explanation:</strong> {{ results.chart_validation.explanation | default('N/A') }}</p> #}
+            {# {% elif results.error %} #}
+                 {# <p class="error">Chart validation failed: {{ results.error }}</p> #}
+            {# {% else %} #}
+                 {# <p class="error">Chart validation could not be performed or data was missing.</p> #}
+            {# {% endif %} #}
+            <p><i>Detailed chart validation is currently disabled. Using market signals only.</i></p>
+        </div>
+
+        <div class="section">
+            <h2>Final Recommendation</h2>
+            <div class="decision {{ results.final_decision | default('unknown') }}">
+                {{ results.final_decision | default('UNKNOWN') }}
+            </div>
+            <p class="explanation"><strong>Final Explanation:</strong> {{ results.explanation | default('N/A') }}</p>
+        </div>
+
+        <div class="footer">
+            Processing Time: {{ results.processing_time | default('N/A') }} seconds
+        </div>
+    </div>
+</body>
+</html> 
