@@ -1,0 +1,10 @@
+{
+  "dependencies": {
+    "@influxdata/influxdb-client": "^1.35.0",
+    "@mathieuc/tradingview": "^3.5.1",
+    "csv-parse": "^5.6.0",
+    "express": "^5.1.0",
+    "moment-timezone": "^0.5.48",
+    "ws": "^8.18.1"
+  }
+}

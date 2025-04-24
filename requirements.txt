@@ -1,9 +1,0 @@
-Flask
-pandas
-numpy
-requests
-yfinance
-investpy
-lxml
-beautifulsoup4
-selenium 

@@ -1,90 +1,2644 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-bs-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BTC Trading Decision</title>
+    <title>BTC Decision Engine - Realtime Dashboard</title>
+    <!-- Bootstrap CSS (Ensure dark mode compatibility) -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <!-- Google Fonts (Optional - Example: Poppins) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+
     <style>
-        body { font-family: sans-serif; line-height: 1.6; padding: 20px; max-width: 900px; margin: auto; background-color: #f4f4f4; }
-        .container { background-color: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        h1, h2 { color: #333; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 20px; }
-        .section { margin-bottom: 30px; padding: 20px; border: 1px solid #ddd; border-radius: 5px; background-color: #fdfdfd; }
-        .section h2 { border: none; margin-bottom: 15px; font-size: 1.2em; }
-        strong { color: #555; }
-        ul { list-style: none; padding: 0; }
-        li { margin-bottom: 8px; }
-        .signal { font-size: 1.5em; margin-right: 10px; }
-        .decision { font-size: 1.8em; font-weight: bold; text-align: center; padding: 20px; border-radius: 5px; margin-top: 10px; }
-        .BUY { background-color: #e7f7e7; color: #1d7c1d; border: 1px solid #b7e4b7; }
-        .SELL { background-color: #fde8e8; color: #a32121; border: 1px solid #f9c4c4; }
-        .HOLD { background-color: #fffbea; color: #b58105; border: 1px solid #fbe4a2; }
-        .unknown { background-color: #eee; color: #555; border: 1px solid #ccc; }
-        .explanation { margin-top: 15px; font-style: italic; color: #666; }
-        .chart-confirmed-yes { color: green; font-weight: bold; }
-        .chart-confirmed-no { color: orange; font-weight: bold; }
-        .footer { margin-top: 30px; text-align: center; font-size: 0.9em; color: #888; }
-        .error { color: red; font-weight: bold; }
+        :root {
+            --body-bg: #1a1a1a;
+            --card-bg: #2c2c2c;
+            --text-color: #e0e0e0;
+            --text-muted-color: #a0a0a0;
+            --border-color: #444;
+            --accent-color: #0d6efd; /* Brighter blue */
+            --success-color: #198754;
+            --success-light: #d1e7dd;
+            --success-glow: #2ecc71;
+            --danger-color: #dc3545;
+            --danger-light: #f8d7da;
+            --danger-glow: #e74c3c;
+            --warning-color: #ffc107;
+            --warning-glow: #f39c12;
+            --neutral-color: #6c757d;
+            --font-family-sans-serif: 'Poppins', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            --border-radius: 0.5rem;
+            --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+            --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        body {
+            background-color: var(--body-bg);
+            color: var(--text-color);
+            font-family: var(--font-family-sans-serif);
+            padding-top: 20px;
+            padding-bottom: 40px;
+        }
+
+        .container-fluid {
+            max-width: 1400px;
+        }
+
+        /* Header */
+        .dashboard-header {
+            margin-bottom: 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .dashboard-header h1 {
+            color: #fff;
+            font-weight: 600;
+            margin: 0;
+            font-size: 1.75rem;
+            text-align: left;
+        }
+        #connection-status {
+            font-size: 0.85em;
+            display: flex;
+            align-items: center;
+        }
+        #connection-status-indicator {
+            display: inline-block; 
+            width: 8px; 
+            height: 8px; 
+            border-radius: 50%; 
+            margin-right: 6px; 
+            vertical-align: middle; 
+            transition: background-color 0.3s ease, box-shadow 0.3s ease;
+        }
+        #connection-status-indicator.connected { 
+            background-color: var(--success-glow); 
+            box-shadow: 0 0 6px var(--success-glow); 
+        }
+        #connection-status-indicator.disconnected { 
+            background-color: var(--danger-glow); 
+            animation: pulse-status 1.5s infinite ease-in-out; 
+        }
+        #connection-status-indicator.connecting { 
+            background-color: var(--warning-glow); 
+            animation: pulse-status 1.5s infinite ease-in-out; 
+        }
+        #connection-status-text { 
+            vertical-align: middle; 
+            color: var(--text-muted-color); 
+        }
+
+        @keyframes pulse-status {
+            0% { opacity: 1; box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.4); }
+            70% { opacity: 0.7; box-shadow: 0 0 0 10px rgba(255, 255, 255, 0); }
+            100% { opacity: 1; box-shadow: 0 0 0 0 rgba(255, 255, 255, 0); }
+        }
+
+        /* Recommendation Banner */
+        #recommendation-banner {
+            margin-bottom: 2rem;
+        }
+        .recommendation-banner {
+            background-color: var(--card-bg);
+            padding: 2rem;
+            border-radius: var(--border-radius);
+            margin-bottom: 2rem;
+            text-align: center;
+            box-shadow: var(--shadow-md);
+            border: 1px solid var(--border-color);
+            transition: background-color 0.5s ease, border-color 0.5s ease;
+            max-width: 90%;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .recommendation-banner h2 {
+            font-size: 3rem; 
+            font-weight: 700; 
+            margin-bottom: 0.75rem;
+            transition: color 0.5s ease;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        .recommendation-banner p {
+            font-size: 1.1rem; 
+            color: var(--text-muted-color); 
+            margin-bottom: 0;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .recommendation-banner.status-buy {
+            background-color: rgba(25, 135, 84, 0.2);
+            border-color: var(--success-color);
+        }
+        .recommendation-banner.status-buy h2 { color: var(--success-glow); }
+        .recommendation-banner.status-sell {
+            background-color: rgba(220, 53, 69, 0.2);
+            border-color: var(--danger-color);
+        }
+        .recommendation-banner.status-sell h2 { color: var(--danger-glow); }
+        .recommendation-banner.status-hold {
+            background-color: rgba(108, 117, 125, 0.2);
+            border-color: var(--neutral-color);
+        }
+        .recommendation-banner.status-hold h2 { color: var(--text-color); }
+
+        /* Signal Widgets Grid */
+        #signal-grid {
+            margin-bottom: 2rem;
+        }
+        .signal-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 1.25rem;
+            margin-bottom: 2rem;
+        }
+        .signal-widget {
+            background-color: rgba(44, 44, 44, 0.7);
+            border-radius: var(--border-radius);
+            padding: 1.25rem 1.5rem;
+            box-shadow: var(--shadow-md);
+            border: 1px solid var(--border-color);
+            transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.3s ease;
+            overflow: hidden; /* Contain flash */
+            position: relative;
+        }
+        .signal-widget:hover {
+            transform: translateY(-3px);
+            box-shadow: var(--shadow-md);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+        .widget-header {
+            display: flex; 
+            justify-content: space-between; 
+            align-items: flex-start; 
+            margin-bottom: 0.75rem;
+            font-size: 0.9rem; 
+            font-weight: 600; 
+            color: var(--text-muted-color);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .widget-header i {
+            font-size: 0.85rem;
+            margin-left: 0.35rem;
+            opacity: 0.7;
+            cursor: help;
+            vertical-align: middle;
+        }
+        .widget-icon {
+            font-size: 1.3em; 
+            transition: transform 0.3s ease;
+        }
+        .widget-price {
+            font-size: 1.8rem; 
+            font-weight: 700; 
+            margin-bottom: 0.5rem; 
+            color: #fff;
+        }
+        .widget-change {
+            font-size: 0.9rem; 
+            font-weight: 600;
+        }
+        .widget-change .value {
+            margin-right: 5px;
+        }
+        .widget-change .percent {
+            font-size: 0.85em;
+            color: var(--text-muted-color);
+        }
+        .widget-change.positive { color: var(--success-glow); }
+        .widget-change.negative { color: var(--danger-glow); }
+        .widget-change.neutral { color: var(--text-muted-color); }
+
+        /* Widget Update Animations */
+        .signal-widget.price-up {
+            animation: flash-green 0.6s ease-out;
+        }
+        .signal-widget.price-down {
+            animation: flash-red 0.6s ease-out;
+        }
+        @keyframes flash-green {
+            0%, 100% { background-color: var(--card-bg); }
+            50% { background-color: rgba(46, 204, 113, 0.3); }
+        }
+        @keyframes flash-red {
+            0%, 100% { background-color: var(--card-bg); }
+            50% { background-color: rgba(231, 76, 60, 0.3); }
+        }
+        .widget-icon.updated {
+            animation: scale-pop 0.4s ease-out;
+        }
+        @keyframes scale-pop {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.3); }
+        }
+
+        /* Details Section */
+        .details-section {
+            margin-top: 2rem;
+            margin-bottom: 1.5rem;
+        }
+        .details-accordion {
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            overflow: hidden;
+            margin-bottom: 1.5rem;
+        }
+        .details-accordion-header {
+            padding: 1rem 1.5rem;
+            background-color: rgba(255, 255, 255, 0.03);
+            font-weight: 600;
+            color: var(--text-color);
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background-color 0.2s ease;
+        }
+        .details-accordion-header:hover {
+            background-color: rgba(255, 255, 255, 0.05);
+        }
+        .details-accordion-body {
+            padding: 1.5rem;
+            background-color: var(--card-bg);
+            max-width: 60rem; /* Limit text line length for better readability */
+        }
+        .details-accordion-body p {
+            line-height: 1.6;
+            color: var(--text-color);
+            margin-bottom: 1rem;
+        }
+        .details-accordion-body ol, 
+        .details-accordion-body ul {
+            padding-left: 1.5rem;
+            margin-bottom: 1rem;
+        }
+        .details-accordion-body li {
+            margin-bottom: 0.5rem;
+            line-height: 1.5;
+        }
+        .details-section .card {
+            background-color: var(--card-bg);
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--border-color);
+            margin-bottom: 1.5rem;
+        }
+        .details-section .card-header {
+            background-color: rgba(255, 255, 255, 0.03);
+            font-weight: 600;
+            padding: 1rem 1.5rem;
+        }
+        .details-section .card-body {
+            padding: 1.5rem;
+        }
+        .status-yes { color: var(--success-glow); font-weight: 600; }
+        .status-no { color: var(--warning-glow); font-weight: 600; }
+        .status-error { color: var(--danger-glow); font-weight: 600; }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            margin-top: 2rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border-color);
+            font-size: 0.85em;
+            color: var(--text-muted-color);
+        }
+
+        /* Style the specific BTC validation card */
+        .btc-validation-card .card-body {
+            padding-top: 1.5rem;
+        }
+        .btc-detail-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            font-size: 1.1rem;
+            padding: 0.3rem 0;
+        }
+        .btc-label {
+            color: var(--text-muted-color);
+            font-weight: 400;
+            margin-right: 1rem;
+        }
+        .btc-value {
+            font-weight: 600;
+            text-align: right;
+        }
+        .btc-value.price {
+            font-size: 1.6rem; /* Make price larger */
+            color: #fff;
+        }
+        .btc-value.change {
+            font-size: 1rem;
+        }
+        .btc-value.change .percent {
+            font-size: 0.9em;
+            margin-left: 4px;
+            color: var(--text-muted-color);
+        }
+        .btc-value.trend {
+            font-size: 1rem;
+            text-transform: capitalize;
+        }
+        .btc-value.positive { color: var(--success-glow); }
+        .btc-value.negative { color: var(--danger-glow); }
+        .btc-value.neutral { color: var(--text-muted-color); }
+
+        /* BTC Price Update Animation Target */
+        #btc-price-container.price-up {
+            animation: flash-green-light 0.6s ease-out;
+        }
+        #btc-price-container.price-down {
+             animation: flash-red-light 0.6s ease-out;
+        }
+
+        @keyframes flash-green-light {
+            0%, 100% { background-color: transparent; }
+            50% { background-color: rgba(46, 204, 113, 0.15); }
+        }
+        @keyframes flash-red-light {
+            0%, 100% { background-color: transparent; }
+            50% { background-color: rgba(231, 76, 60, 0.15); }
+        }
+
+        /* Overrides for the specific BTC card */
+        .btc-validation-card {
+            border: 1px solid var(--accent-color); /* Highlight border */
+             background: linear-gradient(145deg, #2f2f2f, #252525); /* Subtle gradient */
+        }
+
+        /* Prominent Price */
+        .btc-prominent-price {
+            font-size: 2.8rem; /* Make price significantly larger */
+            font-weight: 700;
+            color: #fff;
+            line-height: 1.1;
+            transition: color 0.4s ease;
+            position: relative;
+        }
+        .currency-symbol {
+             font-size: 0.6em; /* Smaller dollar sign */
+             vertical-align: super;
+             margin-right: 2px;
+             color: var(--text-muted-color);
+        }
+        /* Price Flash/Pulse Animation */
+        #btc-prominent-price.price-up span,
+        #btc-prominent-price.price-down span {
+             animation: pulse-price 0.6s ease-out;
+        }
+        @keyframes pulse-price {
+             0%, 100% { transform: scale(1); }
+             50% { transform: scale(1.05); }
+        }
+        #btc-prominent-price.price-up { color: var(--success-glow); }
+        #btc-prominent-price.price-down { color: var(--danger-glow); }
+
+
+        /* Change and Trend */
+        .btc-change-trend {
+            display: flex;
+            justify-content: center;
+            align-items: baseline;
+            gap: 0.75rem; /* Space between change and trend */
+            font-size: 1rem;
+        }
+        .btc-change-trend .btc-value.change {
+            font-weight: 600;
+            transition: color 0.4s ease;
+        }
+         .btc-change-trend .btc-value.change .percent {
+             font-size: 0.9em;
+             margin-left: 4px;
+             color: var(--text-muted-color);
+         }
+        .btc-change-trend .btc-value.trend {
+             font-weight: 600;
+             display: inline-flex; /* Align icon and text */
+             align-items: center;
+             gap: 0.3rem;
+             transition: color 0.4s ease;
+             text-transform: capitalize;
+        }
+         .trend-icon {
+             font-size: 1.2em;
+             transition: transform 0.3s ease, color 0.3s ease;
+         }
+         .btc-change-trend .separator {
+            color: var(--border-color);
+         }
+         /* Color classes for change/trend text/icons */
+         .btc-value.positive {
+             color: var(--success-glow);
+         }
+         .btc-value.negative {
+             color: var(--danger-glow);
+         }
+         .btc-value.neutral {
+             color: var(--text-muted-color);
+         }
+
+        /* Confirmation Section */
+        .confirmation-section {
+            margin-top: 1rem;
+            font-size: 0.95rem;
+        }
+        .status-indicator {
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            transition: color 0.4s ease;
+        }
+        .status-indicator .icon {
+             font-size: 1.1em;
+              transition: transform 0.3s ease;
+        }
+        /* Status colors */
+        .status-indicator.status-yes {
+             color: var(--success-glow);
+        }
+         .status-indicator.status-no {
+             color: var(--warning-glow);
+         }
+         .status-indicator.status-error {
+             color: var(--danger-glow);
+         }
+          /* Status update animation */
+         .status-indicator.updated .icon {
+             animation: scale-pop 0.4s ease-out;
+         }
+
+        /* Funding Score Moderno */
+        #funding-score-card {
+            background: var(--card-bg);
+            border-radius: 1rem;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+            padding: 1.2rem 2rem;
+            margin: 1.5rem auto 1rem auto;
+            max-width: 420px;
+            text-align: center;
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: var(--text-color);
+            position: relative;
+            transition: box-shadow 0.3s;
+        }
+        #funding-score-card.pulse {
+            animation: pulse-glow 0.7s;
+            box-shadow: 0 0 24px 6px #0d6efd66;
+        }
+        @keyframes pulse-glow {
+            0% { box-shadow: 0 0 0 0 #0d6efd44; }
+            70% { box-shadow: 0 0 24px 12px #0d6efd99; }
+            100% { box-shadow: 0 0 0 0 #0d6efd44; }
+        }
+        .funding-sinal {
+            font-size: 1.5rem;
+            margin: 0 0.5rem;
+            font-weight: 700;
+            vertical-align: middle;
+        }
+        .sinal-up { color: var(--success-glow); }
+        .sinal-down { color: var(--danger-glow); }
+        .sinal-neutral { color: var(--text-muted-color); }
+
+        /* Alerta animado */
+        #alert-banner {
+            margin-top: 1.2rem;
+            margin-bottom: 1.2rem;
+            opacity: 0;
+            transition: opacity 0.5s;
+            font-size: 1.2rem;
+            border-radius: 0.7rem;
+        }
+        #alert-banner.show {
+            opacity: 1;
+            animation: fadeInAlert 0.7s;
+        }
+        @keyframes fadeInAlert {
+            from { opacity: 0; transform: scale(0.98); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        #alert-banner .alert-icon {
+            animation: alert-bounce 1.2s infinite;
+            font-size: 1.5em;
+            margin-right: 0.5em;
+        }
+        @keyframes alert-bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-7px); }
+        }
+
+        #basis-widget {
+            background: linear-gradient(90deg, #232526 0%, #414345 100%);
+            border-radius: 1rem;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+            padding: 1.2rem 2rem;
+            margin: 1.5rem auto 1rem auto;
+            max-width: 420px;
+            text-align: center;
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #fff;
+            position: relative;
+            transition: box-shadow 0.3s;
+        }
+        #basis-value.positive { color: var(--success-glow); }
+        #basis-value.negative { color: var(--danger-glow); }
+        #basis-value.neutral { color: var(--text-muted-color); }
+        #basis-value {
+            font-size: 2.1rem;
+            font-weight: 700;
+            margin-bottom: 0.2em;
+            cursor: pointer;
+        }
+        #basis-tooltip {
+            display: none;
+            position: absolute;
+            left: 50%;
+            top: 100%;
+            transform: translateX(-50%);
+            background: #222;
+            color: #fff;
+            padding: 0.6em 1em;
+            border-radius: 0.7em;
+            font-size: 1rem;
+            margin-top: 0.5em;
+            z-index: 10;
+            box-shadow: 0 2px 8px #0008;
+            white-space: nowrap;
+        }
+        #basis-value:hover + #basis-tooltip {
+            display: block;
+        }
+
+        #book-pressure-widget {
+            background: linear-gradient(90deg, #232526 0%, #414345 100%);
+            border-radius: 1rem;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+            padding: 1.2rem 2rem;
+            margin: 1.5rem auto 1rem auto;
+            max-width: 420px;
+            text-align: center;
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: var(--text-color);
+            position: relative;
+            transition: box-shadow 0.3s;
+        }
+        /* Book Pressure Bar Styling */
+        #book-pressure-bar {
+            height: 10px;
+            background-color: rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+            margin: 10px 0;
+            overflow: hidden;
+            position: relative;
+        }
+        #book-pressure-fill {
+            height: 100%;
+            background: linear-gradient(to right, var(--danger-glow), var(--neutral-color) 50%, var(--success-glow));
+            transition: width 0.5s ease;
+            position: absolute;
+            top: 0;
+            left: 0;
+            border-radius: 5px;
+        }
+        #book-pressure-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 0.2em;
+            display: inline-block;
+        }
+        #book-pressure-alert {
+            color: var(--danger-glow);
+            font-weight: 600;
+            font-size: 0.85rem;
+            margin-top: 0.5rem;
+            animation: pulse-alert 2s infinite;
+        }
+        @keyframes pulse-alert {
+            0%, 100% { opacity: 0.8; }
+            50% { opacity: 1; }
+        }
+
+        /* --- MELHORIA DE POSICIONAMENTO E ESPAÇAMENTO --- */
+        .main-widgets-row {
+            display: flex;
+            font-weight: 500;
+        }
+        .market-indicator-change.positive { color: var(--success-glow); }
+        .market-indicator-change.negative { color: var(--danger-glow); }
+        .market-indicator-change.neutral { color: var(--text-muted-color); }
+
+        /* BTC Specific Indicators Section */
+        .btc-indicators-section {
+            margin-bottom: 2rem;
+        }
+        .btc-indicators-card {
+            background-color: rgba(44, 44, 44, 0.7); /* Slightly lighter background */
+            border-radius: var(--border-radius);
+            padding: 1.5rem;
+            box-shadow: var(--shadow-md);
+            border: 1px solid var(--border-color);
+        }
+        .btc-indicators-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 1.25rem;
+            color: var(--text-color);
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .btc-indicators-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1.5rem;
+        }
+        @media (max-width: 992px) {
+            .btc-indicators-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        @media (max-width: 576px) {
+            .btc-indicators-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        .btc-indicator-card {
+            background-color: var(--card-bg);
+            border-radius: var(--border-radius);
+            padding: 1.25rem;
+            text-align: center;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--border-color);
+        }
+        .btc-indicator-header {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text-muted-color);
+            margin-bottom: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .btc-indicator-header i {
+            margin-left: 0.35rem;
+            font-size: 0.85rem;
+            opacity: 0.7;
+            cursor: help;
+        }
+        .btc-indicator-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #fff;
+            margin: 0.5rem 0;
+        }
+        .btc-indicator-subtitle {
+            font-size: 0.85rem;
+            color: var(--text-muted-color);
+            margin-top: auto;
+        }
+        .btc-indicator-value.positive { color: var(--success-glow); }
+        .btc-indicator-value.negative { color: var(--danger-glow); }
+        .btc-indicator-value.neutral { color: var(--text-muted-color); }
+
+        /* Tooltip improvements */
+        [title] {
+            position: relative;
+            cursor: help;
+        }
+        [title]:hover::after {
+            content: attr(title);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: max-content;
+            max-width: 300px;
+            background-color: rgba(25, 25, 25, 0.95);
+            color: var(--text-color);
+            text-align: center;
+            border-radius: 6px;
+            padding: 10px 14px;
+            font-size: 0.85rem;
+            font-weight: normal;
+            line-height: 1.4;
+            z-index: 100;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+            transition: opacity 0.2s, transform 0.2s;
+            border: 1px solid var(--border-color);
+        }
+        .market-indicators-title i,
+        .btc-indicators-title i {
+            font-size: 0.85rem;
+            margin-left: 0.5rem;
+            opacity: 0.7;
+            cursor: help;
+            vertical-align: middle;
+        }
+        .market-indicators-name i {
+            font-size: 0.85rem;
+            margin-left: 0.35rem;
+            opacity: 0.7;
+            cursor: help;
+        }
+
+        /* CSS para o título da seção */
+        .market-section {
+            margin-bottom: 2rem;
+        }
+        .section-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: var(--text-color);
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .section-title i {
+            font-size: 0.85rem;
+            margin-left: 0.5rem;
+            opacity: 0.7;
+            cursor: help;
+            vertical-align: middle;
+        }
+
+        /* Removendo bloco duplicado de body aqui */
+
+        .btc-indicator-value.positive {
+            color: var(--success-glow);
+        }
+        
+        .btc-indicator-value.negative {
+            color: var(--danger-glow);
+        }
+        
+        .btc-indicator-value.neutral {
+            color: var(--text-muted-color);
+        }
+        
+        .alert-banner {
+            width: 100%;
+            padding: 10px;
+            background-color: var(--danger-light);
+            color: var(--danger-color);
+            text-align: center;
+            font-weight: bold;
+            display: none;
+            margin-bottom: 10px;
+        }
+        
+        @keyframes pulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7);
+            }
+            70% {
+                box-shadow: 0 0 0 10px rgba(220, 53, 69, 0);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(220, 53, 69, 0);
+            }
+        }
+        
+        .pulse {
+            animation: pulse 1.5s infinite;
+        }
+
+        /* New York Market Hours Block */
+        #ny-market-hours {
+          background: linear-gradient(90deg, #232526 0%, #414345 100%);
+          border-radius: 1rem;
+          box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+          padding: 1.2rem 2rem;
+          margin: 1.5rem auto 1rem auto;
+          max-width: 420px;
+          color: var(--text-color);
+          border: 1px solid var(--border-color);
+        }
+        #ny-market-hours h4 {
+          font-weight: 600;
+          color: #fff;
+          margin-bottom: 10px;
+          letter-spacing: 0.5px;
+        }
+        #ny-status-row {
+          font-size: 1.08em;
+          margin-bottom: 6px;
+        }
+        #ny-status-icon {
+          font-size: 1.3em;
+          vertical-align: middle;
+        }
+        #ny-status-text {
+          font-weight: 500;
+          color: var(--text-color);
+        }
+        #ny-current-time {
+          color: var(--text-muted-color);
+          font-size: 0.98em;
+          margin-bottom: 6px;
+          margin-top: 6px;
+        }
+        #ny-timeline-bar {
+          position: relative;
+          height: 22px;
+          margin: 10px 0 8px 0;
+        }
+        #ny-timeline-bg {
+          background: #333;
+          border-radius: 8px;
+          height: 10px;
+          width: 100%;
+          position: absolute;
+          top: 6px;
+        }
+        #ny-timeline-active {
+          background: #198754;
+          border-radius: 8px;
+          height: 10px;
+          position: absolute;
+          top: 6px;
+          left: 0;
+          width: 0;
+          transition: width 0.4s cubic-bezier(.4,2,.6,1), background 0.3s;
+        }
+        #ny-timeline-now {
+          position: absolute;
+          top: 0;
+          width: 2px;
+          height: 22px;
+          background: #fff;
+          left: 0;
+          border-radius: 2px;
+          box-shadow: 0 0 6px #fff8;
+          z-index: 2;
+          transition: left 0.4s cubic-bezier(.4,2,.6,1);
+        }
+        .ny-timeline-labels {
+          display: flex;
+          justify-content: space-between;
+          font-size: 0.92em;
+          color: var(--text-muted-color);
+          position: absolute;
+          width: 100%;
+          top: 18px;
+          z-index: 3;
+        }
+        #ny-next-event {
+          font-size: 0.97em;
+          color: var(--text-muted-color);
+          margin-top: 4px;
+          font-style: italic;
+        }
+        @media (max-width: 600px) {
+          #ny-market-hours {
+            padding: 1rem 0.7rem;
+            max-width: 98vw;
+          }
+        }
+        /* Alinhar título e NY Market Hours na mesma linha */
+        .market-indicators-header-row {
+          display: flex;
+          align-items: flex-end;
+          justify-content: space-between;
+          gap: 18px;
+          flex-wrap: wrap;
+          margin-bottom: 0.5rem;
+        }
+        @media (max-width: 900px) {
+          .market-indicators-header-row {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 8px;
+          }
+          #ny-market-hours {
+            margin-left: 0;
+            margin-right: 0;
+            width: 100%;
+            max-width: 100vw;
+          }
+        }
+        .ny-market-inline {
+          display: flex;
+          flex-direction: column;
+          align-items: flex-start;
+          width: 100%;
+          max-width: 100%;
+          background: linear-gradient(90deg, rgba(35, 35, 38, 0.95) 0%, rgba(45, 45, 50, 0.92) 100%);
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.13);
+          padding: 0 22px;
+          color: var(--text-color);
+          border-radius: 7px;
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          backdrop-filter: blur(8px);
+          transition: all 0.3s ease;
+          font-size: 1em;
+          margin: 0;
+          height: auto;
+          min-width: 320px;
+          margin-bottom: 12px;
+        }
+        #ny-current-time {
+          color: var(--text-muted-color);
+          font-size: 0.98em;
+          margin-bottom: 6px;
+          margin-top: 6px;
+        }
+        .ny-status-group {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+        .ny-status-dot {
+          display: inline-block;
+          width: 11px;
+          height: 11px;
+          border-radius: 50%;
+          margin-right: 7px;
+          vertical-align: middle;
+          background: #dc3545;
+          box-shadow: 0 0 4px #dc3545cc;
+        }
+        .ny-status-dot.open {
+          background: #2ecc71;
+          box-shadow: 0 0 4px #2ecc71cc;
+        }
+        #ny-status-text {
+          font-weight: 600;
+          font-size: 0.97em;
+          color: #fff;
+          vertical-align: middle;
+          display: flex;
+          align-items: center;
+        }
+        .ny-clock-badge {
+          display: flex;
+          align-items: center;
+          background: #232526;
+          color: #fff;
+          border-radius: 7px;
+          padding: 2px 12px 2px 8px;
+          font-size: 0.97em;
+          font-weight: 500;
+          margin-left: 8px;
+          box-shadow: 0 1px 4px #0002;
+          gap: 6px;
+        }
+        .ny-clock-badge .bi {
+          font-size: 1.1em;
+          margin-right: 2px;
+          color: #ffc107;
+        }
+        .ny-time-group {
+          display: flex;
+          align-items: center;
+          gap: 14px;
+          margin-left: 18px;
+        }
+        #ny-next-event {
+          color: var(--text-muted-color);
+          font-size: 0.85em;
+          font-style: italic;
+        }
+        /* Badge FECHADO dos índices globais em vermelho */
+        span.badge.fechado,
+        .badge.fechado,
+        span.badge.fechado,
+        .signal-widget .badge.fechado,
+        .signal-widget span.badge.fechado {
+          background: #dc3545 !important;
+          color: #fff !important;
+          border-radius: 7px !important;
+          font-weight: 600;
+          letter-spacing: 0.5px;
+          font-size: 0.92em;
+        }
+        .widget-icon.positive, .widget-icon.negative {
+          animation: pulse-icon 1.2s infinite;
+          filter: drop-shadow(0 0 6px currentColor);
+        }
+        .widget-icon.positive {
+          color: #2ecc71 !important;
+        }
+        .widget-icon.negative {
+          color: #e74c3c !important;
+        }
+        .widget-icon.positive svg, .widget-icon.negative svg {
+          color: #fff !important;
+        }
+        @keyframes pulse-icon {
+          0% { transform: scale(1); filter: drop-shadow(0 0 6px currentColor);}
+          50% { transform: scale(1.18); filter: drop-shadow(0 0 16px currentColor);}
+          100% { transform: scale(1); filter: drop-shadow(0 0 6px currentColor);}
+        }
+        .widget-icon.neutral  { color: #a0a0a0 !important; }  /* cinza */
+        .widget-icon-stack {
+          position: relative;
+          display: inline-block;
+          width: 1.3em;
+          height: 1.3em;
+          vertical-align: middle;
+        }
+        .widget-icon-stack .bi-circle-fill {
+          font-size: 1.3em;
+          position: absolute;
+          left: 0; top: 0;
+        }
+        .widget-icon-stack .bi-arrow-up-short,
+        .widget-icon-stack .bi-arrow-down-short {
+          font-size: 0.9em;
+          color: #fff !important;
+          position: absolute;
+          left: 0.2em; top: 0.18em;
+          z-index: 1;
+        }
+        .widget-icon-stack.positive .bi-circle-fill { color: #2ecc71 !important; }
+        .widget-icon-stack.negative .bi-circle-fill { color: #e74c3c !important; }
+        .widget-icon-stack.positive, .widget-icon-stack.negative {
+          animation: pulse-icon 1.2s infinite;
+          filter: drop-shadow(0 0 6px currentColor);
+        }
+        .widget-icon-stack.positive .bi-circle-fill,
+        .widget-icon-stack.negative .bi-circle-fill {
+          animation: pulse-icon 1.2s infinite;
+          filter: drop-shadow(0 0 6px currentColor);
+        }
+        .widget-icon-stack.positive .bi-circle-fill { color: #2ecc71 !important; }
+        .widget-icon-stack.negative .bi-circle-fill { color: #e74c3c !important; }
+        .widget-icon-stack .bi-arrow-up-short,
+        .widget-icon-stack .bi-arrow-down-short {
+          font-size: 0.9em;
+          color: #fff !important;
+          position: absolute;
+          left: 0.2em; top: 0.18em;
+          z-index: 1;
+          /* seta branca estática, sem animação */
+        }
+        .widget-icon-stack.neutral .bi-circle-fill { color: #a0a0a0 !important; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Bitcoin Trading Analysis</h1>
-        <p>Analysis generated at: {{ results.timestamp | default('N/A') }}</p>
-
-        <div class="section">
-            <h2>Market Signals</h2>
-            <ul>
-                {% for indicator, data in results.signals.items() %}
-                    {% if indicator != 'Overall' %}
-                    <li>
-                        <span class="signal">{{ data.signal | default('?') }}</span>
-                        <strong>{{ indicator }}:</strong> Trend: {{ data.trend | default('unknown') }}
-                        {% if data.price is not none %}
-                            , Price: {{ data.price | default('N/A') }}
-                        {% endif %}
-                    </li>
-                    {% endif %}
-                {% endfor %}
-            </ul>
-            <h3>Overall Market Sentiment: <span class="signal">{{ results.signals.Overall.signal | default('?') }}</span> {{ results.signals.Overall.trend | default('unknown') }} ({{ results.signals.Overall.price | default('N/A') }})</h3>
-        </div>
-
-        <div class="section">
-            <h2>Initial Decision (Based on Market Signals)</h2>
-            <p><strong>Decision:</strong> {{ results.initial_decision.decision | default('Error') }}</p>
-            <p><strong>Reason:</strong> {{ results.initial_decision.explanation | default('N/A') }}</p>
-        </div>
-
-        <div class="section">
-            <h2>BTC Chart Validation</h2>
-            {# {% if results.chart_validation %} #}
-                {# <p><strong>BTC Analysis Summary:</strong> {{ results.btc_analysis_summary | default('N/A') }}</p> #}
-                {# <p><strong>Chart Confirmed Initial Decision:</strong>
-                    <span class="{{ 'chart-confirmed-yes' if results.chart_validation.chart_confirmed else 'chart-confirmed-no' }}">
-                        {{ 'Yes' if results.chart_validation.chart_confirmed else 'No' }}
-                    </span>
-                </p> #}
-                {# <p><strong>Chart Analysis Details:</strong> {{ results.chart_validation.chart_explanation | default('N/A') }}</p> #}
-                {# <p><strong>Validation Explanation:</strong> {{ results.chart_validation.explanation | default('N/A') }}</p> #}
-            {# {% elif results.error %} #}
-                 {# <p class="error">Chart validation failed: {{ results.error }}</p> #}
-            {# {% else %} #}
-                 {# <p class="error">Chart validation could not be performed or data was missing.</p> #}
-            {# {% endif %} #}
-            <p><i>Detailed chart validation is currently disabled. Using market signals only.</i></p>
-        </div>
-
-        <div class="section">
-            <h2>Final Recommendation</h2>
-            <div class="decision {{ results.final_decision | default('unknown') }}">
-                {{ results.final_decision | default('UNKNOWN') }}
+    <!-- Container -->
+    <div class="container-fluid">
+        <!-- Header -->
+        <header class="dashboard-header" style="align-items: center;">
+            <h1>BTC Decision Engine</h1>
+            <div style="display: flex; align-items: center; gap: 18px;">
+                <div id="connection-status">
+                    <span id="connection-status-indicator" class="connecting"></span>
+                    <span id="connection-status-text">Connecting...</span>
+                </div>
             </div>
-            <p class="explanation"><strong>Final Explanation:</strong> {{ results.explanation | default('N/A') }}</p>
+        </header>
+
+        <!-- Signal Widgets Grid (Market Indicators) -->
+        <div class="market-section">
+            <div class="market-indicators-header-row">
+                <h3 class="section-title">
+                    Global Market Indicators 
+                </h3>
+                <div style="display: flex; align-items: center; gap: 10px; margin-left: auto;">
+                    <span id="ny-status-badge" class="ny-clock-badge"><span id="ny-status-dot" class="ny-status-dot"></span><span id="ny-status-text"></span></span>
+                    <span id="ny-clock-standalone" class="ny-clock-badge"><i class="bi bi-clock"></i><span id="ny-clock-text"></span></span>
+                </div>
+            </div>
+            <div id="signal-grid" class="signal-grid">
+                <!-- Signal widgets will be injected here by JS -->
+                <!-- Placeholder/Loading Example -->
+                <div class="signal-widget placeholder-glow"><span class="placeholder col-12"></span></div>
+                <div class="signal-widget placeholder-glow"><span class="placeholder col-12"></span></div>
+                <div class="signal-widget placeholder-glow"><span class="placeholder col-12"></span></div>
+                <div class="signal-widget placeholder-glow"><span class="placeholder col-12"></span></div>
+                <div class="signal-widget placeholder-glow"><span class="placeholder col-12"></span></div>
+                <div class="signal-widget placeholder-glow"><span class="placeholder col-12"></span></div>
+            </div>
         </div>
 
-        <div class="footer">
-            Processing Time: {{ results.processing_time | default('N/A') }} seconds
+        <!-- Recommendation Banner -->
+        <div style="display: flex; gap: 24px; align-items: stretch; margin-bottom: 32px;">
+            <div id="recommendation-banner" class="recommendation-banner status-hold" style="flex: 1;"> <!-- Start with Hold -->
+                <h2 id="final-decision-text">HOLD</h2>
+                <p id="final-explanation">Market is neutral, waiting for a stronger signal.</p>
+            </div>
+            <!-- BTC Scalping Panel -->
+            <div id="scalping-banner" class="recommendation-banner status-hold" style="flex: 1;"> <!-- Start with Hold -->
+                <h2 id="scalping-decision">HOLD</h2>
+                <p id="scalping-explanation">Scalping engine is neutral, waiting for a stronger signal.</p>
+                <div style="display: flex; align-items: center; justify-content: center; gap: 18px; margin: 18px 0 8px 0;">
+                    <canvas id="scalping-gauge" width="110" height="110" style="max-width:110px;"></canvas>
+                    <div id="scalping-score-box" style="display: flex; flex-direction: column; align-items: flex-start; justify-content: center;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span id="scalping-score-value" style="font-size: 2.1rem; font-weight: 700; min-width: 90px; text-align: right;">0.00000</span>
+                            <span id="scalping-intensity-tag" style="font-size: 1.1rem; font-weight: 600; color: #aaa;">Neutral</span>
+                            <span id="scalping-momentum-arrow" style="font-size: 2rem; margin-left: 4px;"></span>
+                        </div>
+                        <canvas id="scalping-sparkline" width="120" height="32" style="margin-top: 6px;"></canvas>
+                    </div>
+                </div>
+            </div>
         </div>
+
+        <!-- BTC Specific Indicators Section -->
+        <section class="btc-indicators-section">
+            <div class="btc-indicators-card">
+                <h3 class="btc-indicators-title">
+                    BTC-Specific Indicators
+                </h3>
+                <div class="btc-indicators-grid">
+                    <!-- Funding Rate -->
+                    <div class="btc-indicator-card">
+                        <div class="btc-indicator-header">
+                            Funding Rate
+                        </div>
+                        <div class="btc-indicator-value" id="funding-rate-value">--</div>
+                        <div class="btc-indicator-subtitle" id="funding-rate-time">--</div>
+                    </div>
+                    
+                    <!-- Open Interest -->
+                    <div class="btc-indicator-card">
+                        <div class="btc-indicator-header">
+                            Open Interest
+                        </div>
+                        <div class="btc-indicator-value" id="open-interest-value">--</div>
+                        <div class="btc-indicator-subtitle" id="open-interest-time">--</div>
+                    </div>
+                    
+                    <!-- Funding Score -->
+                    <div class="btc-indicator-card" id="funding-score-card">
+                        <div class="btc-indicator-header">
+                            Funding Score
+                        </div>
+                        <div class="btc-indicator-value" id="funding-score-value">--</div>
+                        <div class="btc-indicator-subtitle" id="funding-score-subtitle">--</div>
+                    </div>
+                    
+                    <!-- Basis -->
+                    <div class="btc-indicator-card">
+                        <div class="btc-indicator-header">
+                            Basis (PERP vs Spot)
+                        </div>
+                        <div class="btc-indicator-value" id="basis-value">--</div>
+                        <div class="btc-indicator-subtitle" id="basis-tooltip">--</div>
+                        <canvas id="basis-chart" height="80"></canvas>
+                    </div>
+                    
+                    <!-- Book Pressure -->
+                    <div class="btc-indicator-card">
+                        <div class="btc-indicator-header">
+                            Book Pressure
+                        </div>
+                        <div id="book-pressure-bar">
+                            <div id="book-pressure-fill" style="width:50%"></div>
+                        </div>
+                        <div class="btc-indicator-value" id="book-pressure-value">--</div>
+                        <div class="btc-indicator-subtitle" id="book-pressure-alert" style="display:none;">ALERTA: Book Pressure Extremo!</div>
+                    </div>
+                    
+                    <!-- Alert Space (for extreme conditions) -->
+                    <div class="btc-indicator-card" id="alert-banner" style="display:none;">
+                        <div class="btc-indicator-header">
+                            Market Alert
+                        </div>
+                        <div class="btc-indicator-value negative">
+                            <i class="bi bi-exclamation-triangle-fill"></i>
+                        </div>
+                        <div class="btc-indicator-subtitle">🚨 Funding Rate ou Delta OI extremo! 🚨</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Details Section -->
+        <section class="details-section">
+            <div class="row">
+                <div class="col-lg-6 mb-4">
+                    <div class="card h-100 btc-validation-card">
+                        <div class="card-header">BTC Validation Details</div>
+                        <div class="card-body text-center">
+                            <div id="btc-prominent-price" class="btc-prominent-price mb-2">
+                                <span class="currency-symbol">$</span><span id="btc-detail-price">N/A</span>
+                            </div>
+                            <div id="btc-change-trend-container" class="btc-change-trend mb-3">
+                                <span id="btc-detail-change" class="btc-value change neutral">
+                                    <span class="value">N/A</span> (<span class="percent">N/A%</span>)
+                                </span>
+                                <span class="separator">|</span>
+                                <span id="btc-detail-trend" class="btc-value trend neutral">
+                                    <i class="bi bi-dash trend-icon"></i>
+                                    <span class="trend-text">Neutral</span>
+                                </span>
+                            </div>
+                            <hr class="my-3">
+                            <div class="confirmation-section">
+                                <div class="mb-2">
+                                    <strong>Chart Confirmed:</strong>
+                                    <span id="chart-confirmed-status" class="status-indicator status-error">
+                                        <i class="bi bi-question-circle-fill icon"></i>
+                                        <span class="text">N/A</span>
+                                    </span>
+                                </div>
+                                <p class="mb-0"><small><strong>Validation:</strong> <span id="validation-explanation">N/A</span></small></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-6 mb-4">
+                    <div class="card h-100">
+                        <div class="card-header">Initial Decision Logic</div>
+                        <div class="card-body">
+                            <p><strong>Decision:</strong> <span id="initial-decision">N/A</span></p>
+                            <p><small><strong>Reason:</strong> <span id="initial-explanation">N/A</span></small></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Accordion for details -->
+            <div class="details-accordion">
+                <div class="details-accordion-header" data-bs-toggle="collapse" data-bs-target="#howCalculatedAccordion" aria-expanded="true">
+                    How is the recommendation calculated?
+                    <i class="bi bi-chevron-down"></i>
+                </div>
+                <div id="howCalculatedAccordion" class="collapse show details-accordion-body">
+                    <p>The system uses a normalized and weighted scoring model based on global and BTC-specific indicators:</p>
+                    <ol>
+                        <li><strong>Normalization:</strong> Each indicator is normalized to the range [-1, +1] using a specific scale for comparability (e.g., ±5% change → ±1, funding rate ±0.1% → ±1, basis ±0.5% → ±1, book pressure already in [-1, +1]).</li>
+                        <li><strong>Global Market Score:</strong> Nasdaq, S&P 500, VIX (inverted), DXY (inverted), Gold, and Crude Oil are normalized and averaged to form the global score.</li>
+                        <li><strong>BTC-Specific Score:</strong> Funding rate, open interest (Δ 1h), basis (perp vs spot), and book pressure are normalized and combined with specific weights to form the BTC score.</li>
+                        <li><strong>Weighting:</strong> Global indicators (weight 1 each), funding (2.0), open interest (1.5), basis (1.5), book pressure (2.0).</li>
+                        <li><strong>Total Score:</strong> The sum of the global score and BTC-specific score gives the total score.</li>
+                        <li><strong>Decision Thresholds:</strong> If total score ≥ +0.5 → BUY. If ≤ -0.5 → SELL. Otherwise → HOLD.</li>
+                        <li><strong>BTC Trend Validation:</strong> If the decision is BUY but BTC 1h trend is < -0.2%, or SELL but BTC 1h trend is > +0.2%, the decision is converted to HOLD to avoid signals against immediate price action.</li>
+                        <li><strong>Final Recommendation:</strong> The final output is BUY, SELL, or HOLD, with the total score for transparency.</li>
+                    </ol>
+                </div>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="footer mt-4">
+            <small>Last Data Received: <span id="timestamp">N/A</span> | Processing Time: <span id="processing-time">N/A</span></small>
+        </footer>
     </div>
+
+    <!-- Bootstrap JS Bundle (Popper included) -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <script>
+        // --- Constants & State ---
+        const STALE_DATA_THRESHOLD_SECONDS = 60;
+        let lastUpdateTime = null;
+        let staleDataIntervalId = null;
+        let eventSource = null;
+        let priceFlashTimeouts = {}; // Store timeouts for flash animations
+        let basisHistory = [];
+        let basisChart = null;
+        let wsBook = null;
+
+        // --- Utility Functions ---
+        function formatNumber(num, key = null) { // Pass key for context
+            if (num === null || num === undefined || isNaN(num)) return 'N/A';
+
+            let options = {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            };
+
+            // Adjust decimals based on key
+            if (key) {
+                if (typeof key === 'string') {
+                    const lowerKey = key.toLowerCase();
+                    if (lowerKey.includes('nasdaq') || lowerKey.includes('s_p500') || lowerKey.includes('spx')) {
+                        options.minimumFractionDigits = 1;
+                        options.maximumFractionDigits = 1;
+                    } else if (lowerKey.includes('vix') || lowerKey.includes('dxy')) {
+                        options.minimumFractionDigits = 2;
+                        options.maximumFractionDigits = 2;
+                    } else if (lowerKey.includes('crude') || lowerKey.includes('usoil')) {
+                        options.minimumFractionDigits = 2;
+                        options.maximumFractionDigits = 2;
+                    } else if (lowerKey.includes('btc') || lowerKey.includes('gold') || lowerKey.includes('xau')) {
+                        options.minimumFractionDigits = 2;
+                        options.maximumFractionDigits = 2;
+                    } else {
+                        // Default for other keys if any
+                        options.minimumFractionDigits = 2;
+                        options.maximumFractionDigits = 4;
+                    }
+                } else {
+                    // Log if a non-string key was passed
+                    console.warn('formatNumber called with non-string key:', key);
+                    // Use default options if key is not a string
+                    options.minimumFractionDigits = 2;
+                    options.maximumFractionDigits = 4;
+                }
+            } else {
+                // If key is null/undefined, use default options (e.g., for change values)
+                options.minimumFractionDigits = 2;
+                options.maximumFractionDigits = 4;
+            }
+            
+            return num.toLocaleString(undefined, options);
+        }
+
+        function getSignalIcon(signal, data) {
+            // 1. Usa o campo signal se for válido
+            if (signal) {
+                if (
+                    signal.includes('🟢') ||
+                    signal.toLowerCase().includes('buy') ||
+                    signal.toLowerCase().includes('bullish')
+                ) return '<span class="widget-icon-stack positive"><i class="bi bi-circle-fill"></i><i class="bi bi-arrow-up-short"></i></span>';
+                if (
+                    signal.includes('🔴') ||
+                    signal.toLowerCase().includes('sell') ||
+                    signal.toLowerCase().includes('bearish')
+                ) return '<span class="widget-icon-stack negative"><i class="bi bi-circle-fill"></i><i class="bi bi-arrow-down-short"></i></span>';
+            }
+            // 2. Se não, usa o valor de chg
+            if (data && typeof data.chg === 'number') {
+                if (data.chg > 0.00001) return '<span class="widget-icon-stack positive"><i class="bi bi-circle-fill"></i><i class="bi bi-arrow-up-short"></i></span>';
+                if (data.chg < -0.00001) return '<span class="widget-icon-stack negative"><i class="bi bi-circle-fill"></i><i class="bi bi-arrow-down-short"></i></span>';
+            }
+            return '<i class="bi bi-dash-circle widget-icon neutral"></i>'; // Neutral icon
+        }
+
+        // --- NEW: Widget Creation/Update ---
+        function createSignalWidget(key, data) {
+            const widget = document.createElement('div');
+            widget.className = 'signal-widget';
+            widget.id = `signal-${key.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
+
+            // Define tooltips para cada indicador
+            let tooltip = "";
+            if (key.toLowerCase().includes('nasdaq')) {
+                tooltip = "Tech-heavy index that often correlates with BTC. Rising Nasdaq typically suggests risk-on sentiment favorable for crypto.";
+            } else if (key.toLowerCase().includes('s_p500') || key.toLowerCase().includes('spx')) {
+                tooltip = "Broader market index representing 500 large US companies. Generally correlates with BTC in risk-on/risk-off cycles.";
+            } else if (key.toLowerCase().includes('vix')) {
+                tooltip = "Market volatility index or 'fear gauge'. High VIX values often correlate with BTC price pressure as investors seek safety.";
+            } else if (key.toLowerCase().includes('dxy')) {
+                tooltip = "US Dollar Index tracking USD strength against major currencies. Strong dollar (rising DXY) typically puts pressure on BTC prices.";
+            } else if (key.toLowerCase().includes('gold') || key.toLowerCase().includes('xau')) {
+                tooltip = "Traditional store of value asset. BTC sometimes moves with gold during macro uncertainty, but correlation varies.";
+            } else if (key.toLowerCase().includes('crude') || key.toLowerCase().includes('oil')) {
+                tooltip = "Key commodity indicating economic activity and inflation expectations. Indirect impact on BTC through broader market sentiment.";
+            }
+
+            // Initial content (com tooltip)
+            widget.innerHTML = `
+                <div class="widget-header">
+                    <span>${key.replace('_', ' ')}
+                    </span>
+                    <span class="widget-icon-container"></span>
+                </div>
+                <div class="widget-price">--</div>
+                <div class="widget-change neutral">
+                    <span class="value">--</span>
+                    <span class="percent">(---%)</span>
+                </div>
+            `;
+            updateSignalWidget(widget, data); // Populate with initial data
+            return widget;
+        }
+
+        function updateSignalWidget(widget, data) {
+            if (!widget || !data) return;
+
+            const priceEl = widget.querySelector('.widget-price');
+            const changeEl = widget.querySelector('.widget-change');
+            const changeValueEl = widget.querySelector('.widget-change .value');
+            const changePercentEl = widget.querySelector('.widget-change .percent');
+            const iconContainerEl = widget.querySelector('.widget-icon-container');
+
+            // Extract key for formatting context
+            const widgetKey = widget.id.replace('signal-','');
+
+            const oldPriceText = priceEl.textContent;
+            const newPrice = data.price;
+            const priceFormatted = formatNumber(newPrice, widgetKey);
+            const changeValue = data.chg ?? 0;
+            const changePctValue = data.chg_pct ?? 0;
+            
+            const changeFormatted = changeValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4});
+            const changePctFormatted = changePctValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+            // Update Price
+            if (priceEl && priceFormatted !== oldPriceText) {
+                priceEl.textContent = priceFormatted;
+                const widgetId = widget.id;
+                if (priceFlashTimeouts[widgetId]) {
+                    clearTimeout(priceFlashTimeouts[widgetId]);
+                }
+                widget.classList.remove('price-up', 'price-down');
+                if (oldPriceText !== '--' && oldPriceText !== 'N/A') {
+                    if (changeValue > 0) widget.classList.add('price-up');
+                    else if (changeValue < 0) widget.classList.add('price-down');
+                }
+                priceFlashTimeouts[widgetId] = setTimeout(() => {
+                    widget.classList.remove('price-up', 'price-down');
+                }, 600);
+            }
+
+            // Update Change
+            if (changeEl && changeValueEl && changePercentEl) {
+                const changeSign = changeValue > 0.00001 ? '+' : '';
+                const pctSign = changePctValue > 0.001 ? '+' : '';
+
+                changeValueEl.textContent = changeSign + changeFormatted;
+                changePercentEl.textContent = `(${pctSign}${changePctFormatted}%)`; // Add sign here too
+                changeEl.className = 'widget-change '; // Reset class
+                if (changeValue > 0.00001) changeEl.classList.add('positive');
+                else if (changeValue < -0.00001) changeEl.classList.add('negative');
+                else changeEl.classList.add('neutral');
+            }
+
+            // Update Icon
+            if (iconContainerEl) {
+                const oldIconHTML = iconContainerEl.innerHTML;
+                const newIconHTML = getSignalIcon(data.signal, data);
+                if (newIconHTML !== oldIconHTML) {
+                    iconContainerEl.innerHTML = newIconHTML;
+                    const iconElement = iconContainerEl.querySelector('.widget-icon');
+                    if(iconElement) {
+                        iconElement.classList.add('updated');
+                        setTimeout(() => iconElement.classList.remove('updated'), 400); 
+                    }
+                }
+            }
+        }
+
+        // --- Update Other Page Sections ---
+
+        function updateRecommendationBanner(decision, explanation) {
+            const banner = document.getElementById('recommendation-banner');
+            const text = document.getElementById('final-decision-text');
+            const expl = document.getElementById('final-explanation');
+
+            if (banner && text && expl) {
+                text.textContent = decision || 'HOLD';
+                expl.textContent = explanation || 'Analysis pending...';
+
+                banner.className = 'recommendation-banner'; // Reset classes
+                if (decision === 'BUY') banner.classList.add('status-buy');
+                else if (decision === 'SELL') banner.classList.add('status-sell');
+                else banner.classList.add('status-hold');
+            }
+        }
+
+        function updateDetailsSection(initialDecision, initialExplanation, btcData, validationConfirmed, validationExplanation) {
+            // Update Initial Decision Card
+            const initialDecisionEl = document.getElementById('initial-decision');
+            const initialExplanationEl = document.getElementById('initial-explanation');
+            if (initialDecisionEl) initialDecisionEl.textContent = initialDecision;
+            if (initialExplanationEl) initialExplanationEl.textContent = initialExplanation;
+
+            // Update BTC Validation Card - Target new elements
+            const btcPriceContainer = document.getElementById('btc-prominent-price'); // Target for animation class
+            const btcPriceEl = document.getElementById('btc-detail-price');
+            const btcChangeEl = document.getElementById('btc-detail-change');
+            const btcChangeValueEl = btcChangeEl?.querySelector('.value');
+            const btcChangePercentEl = btcChangeEl?.querySelector('.percent');
+            const btcTrendEl = document.getElementById('btc-detail-trend');
+            const btcTrendTextEl = btcTrendEl?.querySelector('.trend-text');
+            const btcTrendIconEl = btcTrendEl?.querySelector('.trend-icon');
+            const chartConfirmedStatusEl = document.getElementById('chart-confirmed-status');
+            const chartConfirmedIconEl = chartConfirmedStatusEl?.querySelector('.icon');
+            const chartConfirmedTextEl = chartConfirmedStatusEl?.querySelector('.text');
+            const validationExplanationEl = document.getElementById('validation-explanation');
+            
+            const hasBtcData = !!btcData; // Simple check if btcData is provided
+
+            // --- Update BTC Data Elements ---\
+            const priceFormatted = formatNumber(btcData?.price, 'btc');
+            // Lógica para exibir variação de 1h apenas se válida
+            let show1h = false;
+            let changeFormatted = '--';
+            let changePctFormatted = '--';
+            let changeValue = 0;
+            // Considera válida se chg_1h existe, não é null, e existe um campo btcData.chg_1h_valid (opcional) ou se chg_1h !== 0 e !== null
+            if (btcData?.chg_1h !== undefined && btcData?.chg_1h !== null && Math.abs(btcData.chg_1h) > 0.01) {
+                show1h = true;
+                changeFormatted = formatNumber(btcData.chg_1h, null);
+                changePctFormatted = formatNumber(btcData.chg_pct_1h, null);
+                changeValue = btcData.chg_1h;
+            } else if (btcData?.chg !== undefined && btcData?.chg !== null) {
+                changeFormatted = formatNumber(btcData.chg, null);
+                changePctFormatted = formatNumber(btcData.chg_pct, null);
+                changeValue = btcData.chg;
+            }
+            const trendText = btcData?.trend || 'Neutral';
+
+            // Update Price & Trigger Animation
+            if (btcPriceEl) {
+                 const oldPriceText = btcPriceEl.textContent;
+                 if (priceFormatted !== oldPriceText) {
+                     btcPriceEl.textContent = priceFormatted;
+                     const containerId = 'btc-prominent-price'; 
+                     if (priceFlashTimeouts[containerId]) clearTimeout(priceFlashTimeouts[containerId]);
+                     
+                     btcPriceContainer?.classList.remove('price-up', 'price-down');
+                      // Add pulse animation class
+                     if (oldPriceText !== 'N/A') { // Only animate if not initial load
+                         if (changeValue > 0) btcPriceContainer?.classList.add('price-up');
+                         else if (changeValue < 0) btcPriceContainer?.classList.add('price-down');
+                     }
+                     // No need for timeout removal for this animation type if it's short
+                 } else {
+                      // If price is same, ensure animation classes are removed
+                      btcPriceContainer?.classList.remove('price-up', 'price-down');
+                 }
+            }
+
+            // Update Change
+            if (btcChangeValueEl && btcChangePercentEl) {
+                btcChangeValueEl.textContent = changeFormatted;
+                btcChangePercentEl.textContent = `${changePctFormatted}%` + (show1h ? ' (1h)' : '');
+            }
+            if (btcChangeEl) {
+                btcChangeEl.className = 'btc-value change '; // Reset class
+                if (changeValue > 0.00001) btcChangeEl.classList.add('positive');
+                else if (changeValue < -0.00001) btcChangeEl.classList.add('negative');
+                else btcChangeEl.classList.add('neutral');
+            }
+
+            // Update Trend (Text and Icon)
+            if (btcTrendEl && btcTrendTextEl && btcTrendIconEl) {
+                const oldTrendText = btcTrendTextEl.textContent;
+                const newTrendText = trendText;
+                let trendIconClass = 'bi-dash'; // Default
+                let trendColorClass = 'neutral';
+
+                if (trendText === 'bullish') { trendIconClass = 'bi-graph-up'; trendColorClass = 'positive'; }
+                else if (trendText === 'bearish') { trendIconClass = 'bi-graph-down'; trendColorClass = 'negative'; }
+                
+                btcTrendEl.className = `btc-value trend ${trendColorClass}`; // Update color class
+                btcTrendTextEl.textContent = newTrendText;
+                btcTrendIconEl.className = `bi ${trendIconClass} trend-icon`; // Update icon class
+
+                // Optional: Add animation if trend changed
+                // if (newTrendText !== oldTrendText) { ... add animation class ... }
+            }
+
+            // Update Confirmation Status (Text and Icon)
+             if (chartConfirmedStatusEl && chartConfirmedTextEl && chartConfirmedIconEl) {
+                const oldStatusText = chartConfirmedTextEl.textContent;
+                const newStatusText = hasBtcData ? (validationConfirmed ? 'Yes' : 'No') : 'N/A';
+                let statusColorClass = 'status-error';
+                let statusIconClass = 'bi-question-circle-fill';
+
+                if (hasBtcData) {
+                    if (validationConfirmed) { statusColorClass = 'status-yes'; statusIconClass = 'bi-check-circle-fill'; }
+                    else { statusColorClass = 'status-no'; statusIconClass = 'bi-x-circle-fill'; }
+                } 
+                
+                chartConfirmedStatusEl.className = `status-indicator ${statusColorClass}`;
+                chartConfirmedTextEl.textContent = newStatusText;
+                chartConfirmedIconEl.className = `bi ${statusIconClass} icon`;
+
+                 // Trigger animation if status changes
+                 if (newStatusText !== oldStatusText) {
+                    chartConfirmedStatusEl.classList.add('updated');
+                     setTimeout(() => chartConfirmedStatusEl.classList.remove('updated'), 400);
+                 }
+             }
+
+            // Update Validation Explanation
+            if (validationExplanationEl) {
+                validationExplanationEl.textContent = hasBtcData ? validationExplanation : 'BTC data unavailable for validation.';
+            }
+        }
+
+         function updateFooter(timestamp) {
+             const timestampEl = document.getElementById('timestamp');
+             if (timestampEl) {
+                 timestampEl.textContent = timestamp ? new Date(timestamp).toLocaleString() : 'N/A';
+             }
+             // Processing time isn't relevant with SSE, so maybe remove or leave static
+             // const processingTimeEl = document.getElementById('processing-time');
+             // if (processingTimeEl) processingTimeEl.textContent = 'Realtime';
+         }
+
+
+        // --- Status Indicator Update ---
+        function updateStatusIndicator(status, message = '') {
+            const indicator = document.getElementById('connection-status-indicator');
+            const indicatorText = document.getElementById('connection-status-text');
+            if (!indicator || !indicatorText) return;
+
+            indicator.className = 'indicator '; // Reset class
+            let text = '';
+
+            switch (status) {
+                case 'connected':
+                    indicator.classList.add('connected');
+                    text = `Live`;
+                    break;
+                case 'disconnected':
+                    indicator.classList.add('disconnected');
+                    text = `Disconnected ${message}`.trim();
+                    break;
+                case 'connecting':
+                     indicator.classList.add('connecting');
+                     text = `Connecting...`;
+                     break;
+                 case 'error':
+                     indicator.classList.add('disconnected'); // Visually same as disconnected
+                     text = `Error ${message}`.trim();
+                     break;
+                 case 'stale':
+                      indicator.classList.add('connecting'); // Use warning color
+                      text = `Stale ${message}`.trim();
+                     break;
+                 default:
+                    indicator.classList.add('disconnected');
+                    text = 'Unknown Status';
+            }
+            indicatorText.textContent = text;
+        }
+
+        // --- Stale Data Check ---
+         function checkStaleData() {
+            if (!lastUpdateTime) return; // Don't run if no data received yet
+
+            const now = new Date();
+            const secondsSinceLastUpdate = (now - lastUpdateTime) / 1000;
+
+            if (secondsSinceLastUpdate > STALE_DATA_THRESHOLD_SECONDS) {
+                console.warn(`Stale data detected! Last update was ${secondsSinceLastUpdate.toFixed(0)} seconds ago.`);
+                updateStatusIndicator('stale', `(${secondsSinceLastUpdate.toFixed(0)}s ago)`);
+            } else {
+                // If we were stale but now receiving data, SSE handler will set status to connected
+            }
+        }
+
+        // --- SSE Connection Handling ---
+        function connectEventSource() {
+            if (eventSource) eventSource.close();
+
+            console.log('Connecting to SSE endpoint: /api/sse-updates');
+            eventSource = new EventSource('/api/sse-updates');
+            updateStatusIndicator('connecting');
+
+            eventSource.onopen = function(event) {
+                console.log('SSE connection opened.');
+                lastUpdateTime = new Date();
+                updateStatusIndicator('connected');
+                if (staleDataIntervalId) clearInterval(staleDataIntervalId);
+                staleDataIntervalId = setInterval(checkStaleData, (STALE_DATA_THRESHOLD_SECONDS / 2) * 1000);
+            };
+
+            eventSource.onerror = function(event) {
+                console.error('SSE connection error:', event);
+                updateStatusIndicator('disconnected', '(Connection Error)');
+                eventSource.close();
+                if (staleDataIntervalId) clearInterval(staleDataIntervalId);
+                setTimeout(connectEventSource, 5000); // Retry after 5 seconds
+            };
+
+            eventSource.addEventListener('update', function(event) {
+                try {
+                    const messageData = JSON.parse(event.data);
+                    if (messageData.type === 'full' && messageData.data) {
+                        const signals = messageData.data;
+                        console.log('SSE signals:', signals); // DEBUG
+                        const grid = document.getElementById('signal-grid');
+                        if (!grid) return;
+
+                        // Clear placeholder/loading state on first update
+                        if (grid.querySelector('.placeholder-glow')) {
+                            grid.innerHTML = '';
+                        }
+
+                        // --- Data Processing ---
+                        const overallData = signals['Overall'];
+                        const btcData = signals['BTC'];
+
+                        // NOVO: status dos globais
+                        const freshGlobals = overallData?.fresh_globals || [];
+                        const staleGlobals = overallData?.stale_globals || [];
+                        const globalMode = overallData?.global_mode || 'normal';
+
+                        // Update or create signal widgets for each symbol
+                        for (const key in signals) {
+                            if (key === 'Overall' || key === 'BTC') continue; // Skip overall data and BTC as they're not in the grid
+                            const widgetId = `signal-${key.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
+                            let widget = document.getElementById(widgetId);
+                            if (!widget) {
+                                widget = createSignalWidget(key, signals[key]);
+                                grid.appendChild(widget);
+                            } else {
+                                updateSignalWidget(widget, signals[key]);
+                            }
+                            // Badge de status
+                            let badge = widget.querySelector('.status-badge');
+                            if (!badge) {
+                                badge = document.createElement('span');
+                                badge.className = 'status-badge badge ms-2';
+                                widget.querySelector('.widget-header span').appendChild(badge);
+                            }
+                            if (freshGlobals.includes(key)) {
+                                badge.textContent = 'Online';
+                                badge.className = 'status-badge badge bg-success ms-2';
+                                badge.title = 'Indicador atualizado recentemente';
+                            } else if (staleGlobals.includes(key)) {
+                                badge.textContent = 'Fechado';
+                                badge.className = 'status-badge badge bg-danger ms-2';
+                                badge.title = 'Indicador stale (mercado fechado ou sem atualização)';
+                            } else {
+                                badge.textContent = '';
+                                badge.className = 'status-badge badge ms-2';
+                                badge.title = '';
+                            }
+                        }
+                        // Banner modo crypto-only
+                        let cryptoOnlyBanner = document.getElementById('crypto-only-banner');
+                        if (globalMode === 'crypto-only') {
+                            if (!cryptoOnlyBanner) {
+                                cryptoOnlyBanner = document.createElement('div');
+                                cryptoOnlyBanner.id = 'crypto-only-banner';
+                                cryptoOnlyBanner.className = 'alert alert-warning text-center my-2';
+                                cryptoOnlyBanner.innerHTML = '<b>Modo Crypto-Only:</b> Mais da metade dos indicadores globais estão fechados. Sinais baseados apenas em dados cripto 24/7.';
+                                grid.parentElement.insertBefore(cryptoOnlyBanner, grid);
+                            } else {
+                                cryptoOnlyBanner.style.display = '';
+                            }
+                        } else if (cryptoOnlyBanner) {
+                            cryptoOnlyBanner.style.display = 'none';
+                        }
+
+                        // Rest of the existing update logic...
+                        let initialDecision = 'HOLD';
+                        let initialExplanation = 'Overall market sentiment is neutral or unclear.';
+                        if (overallData?.sentiment === 'Bullish') {
+                             initialDecision = 'BUY'; initialExplanation = 'Overall market sentiment is bullish.';
+                        } else if (overallData?.sentiment === 'Bearish') {
+                            initialDecision = 'SELL'; initialExplanation = 'Overall market sentiment is bearish.';
+                        }
+
+                        // 2. Perform BTC Validation
+                        let confirmed = false;
+                        let validationExplanation = 'Validation could not be determined (missing data).';
+                        if (btcData) {
+                            const safeChangePct = formatNumber(btcData.chg_pct, 2);
+                            const btcTrend = btcData.trend;
+
+                            if (initialDecision === 'BUY' && btcTrend === 'bullish') { confirmed = true; validationExplanation = `Confirmed BUY: Overall bullish & BTC bullish (${safeChangePct}%).`; }
+                            else if (initialDecision === 'SELL' && btcTrend === 'bearish') { confirmed = true; validationExplanation = `Confirmed SELL: Overall bearish & BTC bearish (${safeChangePct}%).`; }
+                            else if (initialDecision === 'HOLD') { confirmed = true; validationExplanation = `Confirmed HOLD: Overall neutral. BTC trend: ${btcTrend} (${safeChangePct}%).`; }
+                            else { confirmed = false; validationExplanation = `CONFLICT: Initial ${initialDecision}, BTC trend: ${btcTrend} (${safeChangePct}%).`; }
+                        }
+
+                        // 3. Determine Final Decision
+                        let finalDecision = initialDecision;
+                        let finalExplanation = validationExplanation;
+
+                        // --- UI Updates ---
+
+                        // Update Recommendation Banner
+                        
+
+                        // Update Details Section
+                        updateDetailsSection(initialDecision, initialExplanation, btcData, confirmed, validationExplanation);
+
+                        // Update BTC Indicators (inclui BASIS)
+                        updateBTCIndicators(signals);
+
+                        // Update Footer Timestamp
+                        updateFooter(new Date().toISOString());
+
+                        // Mark as connected and update time
+                        lastUpdateTime = new Date();
+                        updateStatusIndicator('connected');
+
+                    } else {
+                        console.warn('Received unexpected SSE message format:', messageData);
+                    }
+                } catch (error) {
+                    console.error('Error processing SSE update:', error);
+                    updateStatusIndicator('error', '(Processing Error)');
+                }
+            });
+
+             eventSource.addEventListener('error', function(event) {
+                 console.log('SSE custom error event received:', event.data);
+                 try {
+                    const errorData = JSON.parse(event.data);
+                     console.error(`Server-sent error (${errorData.type || 'Unknown'}): ${errorData.message}`);
+                     updateStatusIndicator('error', `(${errorData.type || 'Server'} Error)`);
+                 } catch (e) {
+                     console.error('Failed to parse server-sent error event:', e);
+                     updateStatusIndicator('error', '(Server Error)');
+                 }
+             });
+        }
+
+        // --- Initialization ---
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('DOM fully loaded and parsed');
+            // Initial placeholders are in HTML, JS will replace them
+            connectEventSource();
+            // Stale data check starts on successful connection
+        });
+
+        async function animateCountUp(el, newValue, decimals=2) {
+            const oldValue = parseFloat(el.textContent.replace(/,/g, '')) || 0;
+            if (isNaN(newValue)) { el.textContent = '--'; return; }
+            const duration = 600;
+            const start = performance.now();
+            function step(now) {
+                const progress = Math.min((now - start) / duration, 1);
+                const val = oldValue + (newValue - oldValue) * progress;
+                el.textContent = val.toLocaleString(undefined, {minimumFractionDigits: decimals, maximumFractionDigits: decimals});
+                if (progress < 1) requestAnimationFrame(step);
+            }
+            requestAnimationFrame(step);
+        }
+
+        async function updateFundingOI() {
+            try {
+                // Funding Rate da Binance
+                const fundingRes = await fetch('/api/binance-funding-rate?symbol=BTCUSD_PERP');
+                const fundingData = await fundingRes.json();
+                let funding_rate = null;
+                if (fundingData) {
+                    funding_rate = fundingData.funding_rate;
+                    await animateCountUp(document.getElementById('funding-rate-value'), funding_rate, 6);
+                    document.getElementById('funding-rate-time').textContent =
+                        fundingData.funding_time
+                            ? new Date(fundingData.funding_time).toLocaleString()
+                            : '--';
+                }
+                // Open Interest da Binance
+                const oiRes = await fetch('/api/binance-open-interest?symbol=BTCUSD_PERP');
+                const oiData = await oiRes.json();
+                let open_interest = null;
+                if (oiData) {
+                    open_interest = oiData.open_interest;
+                    await animateCountUp(document.getElementById('open-interest-value'), open_interest, 2);
+                    document.getElementById('open-interest-time').textContent =
+                        oiData.time
+                            ? new Date(oiData.time).toLocaleString()
+                            : '--';
+                }
+                // --- Funding Score e Alerta ---
+                window._oi_history = window._oi_history || [];
+                const now = Date.now();
+                if (open_interest !== null) {
+                    window._oi_history.push({ t: now, v: open_interest });
+                    window._oi_history = window._oi_history.filter(e => e.t > now - 3600*1000);
+                }
+                let oi_ago_1h = null;
+                if (window._oi_history.length > 1) {
+                    oi_ago_1h = window._oi_history[0].v;
+                }
+                let delta_oi = null;
+                if (oi_ago_1h !== null && open_interest !== null) {
+                    delta_oi = (open_interest - oi_ago_1h) / oi_ago_1h;
+                }
+                const FUNDING_THRESHOLD = 0.001;
+                const DELTA_OI_THRESHOLD = 0.05;
+                let sinal_funding = 0;
+                if (funding_rate !== null) {
+                    if (funding_rate > FUNDING_THRESHOLD) sinal_funding = 1;
+                    else if (funding_rate < -FUNDING_THRESHOLD) sinal_funding = -1;
+                }
+                let sinal_oi = 0;
+                if (delta_oi !== null) {
+                    if (delta_oi > DELTA_OI_THRESHOLD) sinal_oi = 1;
+                    else if (delta_oi < -DELTA_OI_THRESHOLD) sinal_oi = -1;
+                }
+                const funding_score = sinal_funding + sinal_oi;
+                
+                // Exibe score com cores apropriadas
+                const scoreValue = document.getElementById('funding-score-value');
+                scoreValue.textContent = funding_score;
+                if (funding_score > 0) {
+                    scoreValue.className = 'btc-indicator-value positive';
+                } else if (funding_score < 0) {
+                    scoreValue.className = 'btc-indicator-value negative';
+                } else {
+                    scoreValue.className = 'btc-indicator-value neutral';
+                }
+                
+                // Adiciona explicação dos sinais no subtitle
+                document.getElementById('funding-score-subtitle').textContent = 
+                    `Funding: ${sinal_funding > 0 ? 'Positivo' : sinal_funding < 0 ? 'Negativo' : 'Neutro'}, OI: ${sinal_oi > 0 ? 'Subindo' : sinal_oi < 0 ? 'Caindo' : 'Estável'}`;
+                
+                // Pulse animation
+                const scoreCard = document.getElementById('funding-score-card');
+                scoreCard.classList.remove('pulse');
+                void scoreCard.offsetWidth; // reflow
+                scoreCard.classList.add('pulse');
+                
+                // Alerta visual animado
+                const alertBanner = document.getElementById('alert-banner');
+                if ((funding_rate !== null && Math.abs(funding_rate) > FUNDING_THRESHOLD) || (delta_oi !== null && Math.abs(delta_oi) > DELTA_OI_THRESHOLD)) {
+                    alertBanner.classList.add('show');
+                    alertBanner.style.display = 'block';
+                } else {
+                    alertBanner.classList.remove('show');
+                    setTimeout(() => { alertBanner.style.display = 'none'; }, 500);
+                }
+            } catch (e) {
+                document.getElementById('funding-rate-value').textContent = '--';
+                document.getElementById('open-interest-value').textContent = '--';
+                document.getElementById('funding-score-value').textContent = '--';
+                document.getElementById('funding-score-subtitle').textContent = '--';
+                const alertBanner = document.getElementById('alert-banner');
+                alertBanner.classList.remove('show');
+                alertBanner.style.display = 'none';
+            }
+        }
+        setInterval(updateFundingOI, 30000);
+        updateFundingOI();
+
+        async function updateBasis() {
+            try {
+                const res = await fetch('/api/basis-history');
+                const history = await res.json();
+                if (!Array.isArray(history) || history.length === 0) {
+                    document.getElementById('basis-value').textContent = '--';
+                    document.getElementById('basis-tooltip').textContent = '--';
+                    document.getElementById('basis-value').removeAttribute('title');
+                    return;
+                }
+                basisHistory = history.map(e => ({
+                    t: new Date(e.timestamp),
+                    basis: e.basis_perc,
+                    perp: e.perp,
+                    spot: e.spot
+                }));
+                const last = basisHistory[basisHistory.length - 1];
+                // Widget
+                const basisValue = document.getElementById('basis-value');
+                const tooltip = document.getElementById('basis-tooltip');
+                let basisClass = 'neutral';
+                if (last.basis > 0.5) basisClass = 'positive';
+                else if (last.basis < -0.5) basisClass = 'negative';
+                basisValue.className = basisClass;
+                basisValue.textContent = `${last.basis.toFixed(3)}%`;
+                // Tooltip detalhado via title
+                basisValue.title = `Perp: $${last.perp.toLocaleString()}\nSpot: $${last.spot.toLocaleString()}\nBasis: ${last.basis.toFixed(3)}%\nAtualizado: ${last.t.toLocaleString()}`;
+                tooltip.innerHTML = '';
+                // Gráfico sem pontos
+                if (!basisChart) {
+                    const ctx = document.getElementById('basis-chart').getContext('2d');
+                    basisChart = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: basisHistory.map(e => e.t.toLocaleTimeString()),
+                            datasets: [{
+                                label: 'Basis (%)',
+                                data: basisHistory.map(e => e.basis),
+                                borderColor: '#0d6efd',
+                                backgroundColor: 'rgba(13,110,253,0.08)',
+                                pointRadius: 0,
+                                pointHoverRadius: 0,
+                                tension: 0.25,
+                                fill: true
+                            }]
+                        },
+                        options: {
+                            plugins: {
+                                legend: { display: false },
+                                tooltip: {
+                                    callbacks: {
+                                        label: function(ctx) {
+                                            const idx = ctx.dataIndex;
+                                            const b = basisHistory[idx];
+                                            return `Basis: ${b.basis.toFixed(3)}% | Perp: $${b.perp.toLocaleString()} | Spot: $${b.spot.toLocaleString()}`;
+                                        }
+                                    }
+                                }
+                            },
+                            scales: {
+                                x: { display: false },
+                                y: {
+                                    beginAtZero: false,
+                                    grid: { color: '#333' },
+                                    ticks: { color: '#aaa', font: { size: 12 } }
+                                }
+                            }
+                        }
+                    });
+                } else {
+                    basisChart.data.labels = basisHistory.map(e => e.t.toLocaleTimeString());
+                    basisChart.data.datasets[0].data = basisHistory.map(e => e.basis);
+                    basisChart.update();
+                }
+            } catch (e) {
+                document.getElementById('basis-value').textContent = '--';
+                document.getElementById('basis-tooltip').textContent = '--';
+                document.getElementById('basis-value').removeAttribute('title');
+            }
+        }
+        setInterval(updateBasis, 30000);
+        updateBasis();
+
+        // --- Book Pressure via WebSocket ---
+        function connectBookPressureWS() {
+            if (wsBook) wsBook.close();
+            wsBook = new WebSocket('wss://dstream.binance.com/ws/btcusd_perp@depth20@100ms');
+            wsBook.onmessage = function(event) {
+                try {
+                    const data = JSON.parse(event.data);
+                    const bids = (data.b || []).map(([p, s]) => [parseFloat(p), parseFloat(s)]);
+                    const asks = (data.a || []).map(([p, s]) => [parseFloat(p), parseFloat(s)]);
+                    if (!bids.length || !asks.length) return;
+                    const bestBid = bids[0][0];
+                    const bestAsk = asks[0][0];
+                    const mid = (bestBid + bestAsk) / 2;
+                    const vol_bids = bids.filter(([p]) => p > mid * 0.999).reduce((a, [,s]) => a + s, 0);
+                    const vol_asks = asks.filter(([p]) => p < mid * 1.001).reduce((a, [,s]) => a + s, 0);
+                    let pressure = null;
+                    if (vol_bids + vol_asks > 0) {
+                        pressure = (vol_bids - vol_asks) / (vol_bids + vol_asks);
+                    }
+                    // Atualiza gauge/barra
+                    const fill = document.getElementById('book-pressure-fill');
+                    const valueEl = document.getElementById('book-pressure-value');
+                    const alertEl = document.getElementById('book-pressure-alert');
+                    if (pressure !== null) {
+                        const percent = Math.round((pressure + 1) * 50); // -1 a +1 → 0% a 100%
+                        fill.style.width = percent + '%';
+                        let color = getComputedStyle(document.documentElement).getPropertyValue('--text-muted-color').trim();
+                        if (pressure > 0.3) color = getComputedStyle(document.documentElement).getPropertyValue('--success-glow').trim();
+                        else if (pressure < -0.3) color = getComputedStyle(document.documentElement).getPropertyValue('--danger-glow').trim();
+                        fill.style.background = color;
+                        valueEl.textContent = pressure.toFixed(3);
+                        // Alerta
+                        if (pressure > 0.3) {
+                            alertEl.textContent = 'ALERTA: Book Pressure de Compra!';
+                            alertEl.className = 'positive';
+                            alertEl.style.display = 'block';
+                        } else if (pressure < -0.3) {
+                            alertEl.textContent = 'ALERTA: Book Pressure de Venda!';
+                            alertEl.className = 'negative';
+                            alertEl.style.display = 'block';
+                        } else {
+                            alertEl.style.display = 'none';
+                        }
+                    } else {
+                        fill.style.width = '50%';
+                        fill.style.background = getComputedStyle(document.documentElement).getPropertyValue('--text-muted-color').trim();
+                        valueEl.textContent = '--';
+                        alertEl.style.display = 'none';
+                    }
+                } catch (e) {}
+            };
+            wsBook.onclose = () => setTimeout(connectBookPressureWS, 3000);
+        }
+        connectBookPressureWS();
+
+        // Update the HTML to reflect new structure for Market Indicators
+        function updateMarketIndicators(data) {
+            const marketIndicatorsGrid = document.getElementById('market-indicators-grid');
+            if (!marketIndicatorsGrid) return;
+            
+            // Clear existing content
+            marketIndicatorsGrid.innerHTML = '';
+            
+            // Define the indicators to display with tooltips
+            const indicators = [
+                { 
+                    key: 'nasdaq', 
+                    name: 'Nasdaq', 
+                    icon: 'bi-graph-up',
+                    tooltip: 'Tech-heavy index that often correlates with BTC. Rising Nasdaq typically suggests risk-on sentiment favorable for crypto.'
+                },
+                { 
+                    key: 's_p500', 
+                    name: 'S&P 500', 
+                    icon: 'bi-graph-up',
+                    tooltip: 'Broader market index representing 500 large US companies. Generally correlates with BTC in risk-on/risk-off cycles.'
+                },
+                { 
+                    key: 'vix', 
+                    name: 'VIX', 
+                    icon: 'bi-activity',
+                    tooltip: 'Market volatility index or "fear gauge". High VIX values often correlate with BTC price pressure as investors seek safety.'
+                },
+                { 
+                    key: 'dxy', 
+                    name: 'DXY', 
+                    icon: 'bi-currency-dollar',
+                    tooltip: 'US Dollar Index tracking USD strength against major currencies. Strong dollar (rising DXY) typically puts pressure on BTC prices.'
+                },
+                { 
+                    key: 'gold', 
+                    name: 'Gold', 
+                    icon: 'bi-coin',
+                    tooltip: 'Traditional store of value asset. BTC sometimes moves with gold during macro uncertainty, but correlation varies.'
+                },
+                { 
+                    key: 'crude_oil', 
+                    name: 'Crude Oil', 
+                    icon: 'bi-droplet-fill',
+                    tooltip: 'Key commodity indicating economic activity and inflation expectations. Indirect impact on BTC through broader market sentiment.'
+                }
+            ];
+            
+            // Create indicator elements
+            indicators.forEach(indicator => {
+                const indicatorData = data[indicator.key];
+                if (!indicatorData) return;
+                
+                const value = indicatorData.value;
+                const change = indicatorData.change;
+                const changeClass = getChangeClass(change);
+                
+                const marketIndicator = document.createElement('div');
+                marketIndicator.className = 'market-indicator';
+                
+                marketIndicator.innerHTML = `
+                    <div class="market-indicator-name">
+                        ${indicator.name}
+                    </div>
+                    <div class="market-indicator-value">${formatNumber(value, indicator.key)}</div>
+                    <div class="market-indicator-change ${changeClass}">
+                        ${change >= 0 ? '+' : ''}${formatNumber(change)}%
+                    </div>
+                `;
+                
+                marketIndicatorsGrid.appendChild(marketIndicator);
+            });
+        }
+
+        // Update BTC-specific indicators
+        function updateBTCIndicators(data) {
+            // Update Funding Rate
+            if (data.funding_rate) {
+                document.getElementById('funding-rate-value').textContent = data.funding_rate.value + '%';
+                document.getElementById('funding-rate-time').textContent = data.funding_rate.time || '';
+                
+                // Set color based on value
+                const fundingRateValue = document.getElementById('funding-rate-value');
+                if (parseFloat(data.funding_rate.value) > 0.01) {
+                    fundingRateValue.className = 'btc-indicator-value positive';
+                } else if (parseFloat(data.funding_rate.value) < -0.01) {
+                    fundingRateValue.className = 'btc-indicator-value negative';
+                } else {
+                    fundingRateValue.className = 'btc-indicator-value neutral';
+                }
+            }
+            
+            // Update Open Interest
+            if (data.open_interest) {
+                document.getElementById('open-interest-value').textContent = formatNumber(data.open_interest.value) + ' BTC';
+                document.getElementById('open-interest-time').textContent = data.open_interest.time || '';
+            }
+            
+            // Update Funding Score
+            if (data.funding_score) {
+                const scoreValue = document.getElementById('funding-score-value');
+                scoreValue.textContent = data.funding_score.value || 'N/A';
+                
+                // Set color based on score
+                if (data.funding_score.value > 0) {
+                    scoreValue.className = 'btc-indicator-value positive';
+                } else if (data.funding_score.value < 0) {
+                    scoreValue.className = 'btc-indicator-value negative';
+                } else {
+                    scoreValue.className = 'btc-indicator-value neutral';
+                }
+                
+                document.getElementById('funding-score-subtitle').textContent = data.funding_score.description || '';
+            }
+            
+            // Update Basis
+            console.log('SSE BTC:', data.BTC); // DEBUG
+            if (data.BTC && typeof data.BTC.basis_perc === 'number') {
+                const basisValue = document.getElementById('basis-value');
+                basisValue.textContent = data.BTC.basis_perc.toFixed(3) + '%';
+                if (data.BTC.basis_perc > 0.1) {
+                    basisValue.className = 'btc-indicator-value positive';
+                } else if (data.BTC.basis_perc < -0.1) {
+                    basisValue.className = 'btc-indicator-value negative';
+                } else {
+                    basisValue.className = 'btc-indicator-value neutral';
+                }
+                document.getElementById('basis-tooltip').textContent = '';
+            }
+            
+            // Update Book Pressure
+            if (data.book_pressure) {
+                const pressureValue = document.getElementById('book-pressure-value');
+                pressureValue.textContent = data.book_pressure.ratio.toFixed(2);
+                
+                // Set color based on ratio
+                if (data.book_pressure.ratio > 1.1) {
+                    pressureValue.className = 'btc-indicator-value positive';
+                } else if (data.book_pressure.ratio < 0.9) {
+                    pressureValue.className = 'btc-indicator-value negative';
+                } else {
+                    pressureValue.className = 'btc-indicator-value neutral';
+                }
+                
+                // Update pressure bar
+                const fillPercentage = Math.min(Math.max((data.book_pressure.ratio / 2) * 100, 0), 100);
+                document.getElementById('book-pressure-fill').style.width = fillPercentage + '%';
+                
+                // Show/hide alert
+                const alertElement = document.getElementById('book-pressure-alert');
+                if (data.book_pressure.ratio > 1.5 || data.book_pressure.ratio < 0.5) {
+                    alertElement.style.display = 'block';
+                } else {
+                    alertElement.style.display = 'none';
+                }
+            }
+            
+            // Show/hide extreme conditions alert
+            const alertBanner = document.getElementById('alert-banner');
+            if ((data.funding_rate && Math.abs(parseFloat(data.funding_rate.value)) > 0.1) || 
+                (data.open_interest && Math.abs(data.open_interest.delta) > 10)) {
+                alertBanner.style.display = 'block';
+            } else {
+                alertBanner.style.display = 'none';
+            }
+        }
+
+        // Helper function to get CSS class based on change value
+        function getChangeClass(change) {
+            if (change > 0) return 'positive';
+            if (change < 0) return 'negative';
+            return 'neutral';
+        }
+
+        // --- Recommendation Banner Update from API ---
+        async function updateRecommendationBannerFromAPI() {
+            try {
+                const res = await fetch('/api/latest-decision');
+                const data = await res.json();
+                const decision = data.decision || 'HOLD';
+                // Usa explanation se existir, senão score_total
+                let explanation = data.explanation;
+                if (!explanation) {
+                    if (decision === 'HOLD') explanation = 'Market is neutral, waiting for a stronger signal.';
+                    else if (decision === 'BUY') explanation = 'Favorable conditions for buying.';
+                    else if (decision === 'SELL') explanation = 'Favorable conditions for selling.';
+                    else explanation = 'Waiting for more data to make a decision.';
+                }
+                // Adiciona o momentum na explicação, se existir
+                if (data.momentum !== null && data.momentum !== undefined) {
+                    explanation = (explanation ? explanation + ' ' : '') + `Momentum: ${data.momentum}`;
+                }
+                updateRecommendationBanner(decision, explanation);
+            } catch (e) {
+                updateRecommendationBanner('HOLD', 'Erro ao consultar decisão do backend.');
+            }
+        }
+
+        // Chamar ao carregar a página e periodicamente
+        document.addEventListener('DOMContentLoaded', () => {
+            updateRecommendationBannerFromAPI();
+            setInterval(updateRecommendationBannerFromAPI, 15000); // a cada 15s
+        });
+
+        async function fetchMarketStatus() {
+          try {
+            const res = await fetch('/api/market-status');
+            const data = await res.json();
+            const container = document.getElementById('market-status-list');
+            if (!container) return;
+            container.innerHTML = '';
+            Object.entries(data).forEach(([key, status]) => {
+              const line = document.createElement('div');
+              line.style.marginBottom = '4px';
+              let badgeColor = status.data_fresh ? 'bg-success' : 'bg-danger';
+              let badgeText = status.data_fresh ? 'Online' : 'Fechado';
+              line.innerHTML = `<b>${key}</b>: <span class="badge ${badgeColor}" style="margin-right:6px;">${badgeText}</span> <span style="font-size:0.95em">${status.message}</span>`;
+              container.appendChild(line);
+            });
+          } catch (err) {
+            const container = document.getElementById('market-status-list');
+            if (container) container.innerHTML = 'Erro ao carregar status dos mercados.';
+          }
+        }
+        fetchMarketStatus();
+        setInterval(fetchMarketStatus, 60000);
+
+        // --- BTC Scalping Panel Update ---
+        function updateScalpingPanel(data) {
+            const banner = document.getElementById('scalping-banner');
+            const decisionEl = document.getElementById('scalping-decision');
+            const explEl = document.getElementById('scalping-explanation');
+            const scoreEl = document.getElementById('scalping-score-value');
+            const tagEl = document.getElementById('scalping-intensity-tag');
+            const arrowEl = document.getElementById('scalping-momentum-arrow');
+            // Cores
+            banner.className = 'recommendation-banner';
+            if (data.decision === 'BUY') banner.classList.add('status-buy');
+            else if (data.decision === 'SELL') banner.classList.add('status-sell');
+            else banner.classList.add('status-hold');
+            // Texto
+            decisionEl.textContent = data.decision || 'HOLD';
+            let explanation = '';
+            if (data.decision === 'BUY') explanation = 'Favorable conditions for scalping buy.';
+            else if (data.decision === 'SELL') explanation = 'Favorable conditions for scalping sell.';
+            else explanation = 'Scalping engine is neutral, waiting for a stronger signal.';
+            explEl.textContent = explanation;
+            // --- Gauge e Score ---
+            const score = typeof data.scalp_score === 'number' ? data.scalp_score : 0;
+            scoreEl.textContent = score.toFixed(5);
+            // --- Tag de intensidade ---
+            const zone = getScalpingZone(score);
+            tagEl.textContent = zone.tag;
+            tagEl.style.color = zone.color;
+            // --- Momentum Arrow ---
+            let momentum = typeof data.momentum === 'number' ? data.momentum : 0;
+            if (momentum > 0.002) {
+                arrowEl.innerHTML = '▲';
+                arrowEl.style.color = '#2ecc71';
+                arrowEl.style.animation = 'pulse-arrow 1s infinite';
+            } else if (momentum < -0.002) {
+                arrowEl.innerHTML = '▼';
+                arrowEl.style.color = '#e74c3c';
+                arrowEl.style.animation = 'pulse-arrow 1s infinite';
+            } else {
+                arrowEl.innerHTML = '';
+                arrowEl.style.animation = '';
+            }
+            // --- Gauge Chart ---
+            const gaugeCtx = document.getElementById('scalping-gauge').getContext('2d');
+            const gaugeValue = Math.max(-0.01, Math.min(0.01, score));
+            const gaugePercent = (gaugeValue + 0.01) / 0.02; // 0 to 1
+            const gaugeColor = zone.color;
+            if (!scalpingGaugeChart) {
+                scalpingGaugeChart = new Chart(gaugeCtx, {
+                    type: 'doughnut',
+                    data: {
+                        datasets: [{
+                            data: [gaugePercent, 1-gaugePercent],
+                            backgroundColor: [gaugeColor, '#222'],
+                            borderWidth: 0,
+                            cutout: '80%',
+                            circumference: 180,
+                            rotation: 270
+                        }]
+                    },
+                    options: {
+                        responsive: false,
+                        plugins: { legend: { display: false } },
+                        tooltips: { enabled: false },
+                    }
+                });
+            } else {
+                scalpingGaugeChart.data.datasets[0].data = [gaugePercent, 1-gaugePercent];
+                scalpingGaugeChart.data.datasets[0].backgroundColor = [gaugeColor, '#222'];
+                scalpingGaugeChart.update();
+            }
+            // --- Sparkline ---
+            window.scalpingScoreHistory.push(score);
+            if (window.scalpingScoreHistory.length > 20) window.scalpingScoreHistory.shift();
+            const sparkCtx = document.getElementById('scalping-sparkline').getContext('2d');
+            if (!scalpingSparklineChart) {
+                scalpingSparklineChart = new Chart(sparkCtx, {
+                    type: 'line',
+                    data: {
+                        labels: window.scalpingScoreHistory.map((_,i)=>i+1),
+                        datasets: [{
+                            data: window.scalpingScoreHistory,
+                            borderColor: '#0d6efd',
+                            backgroundColor: 'rgba(13,110,253,0.08)',
+                            pointRadius: 0,
+                            borderWidth: 2,
+                            tension: 0.3,
+                            fill: true
+                        }]
+                    },
+                    options: {
+                        responsive: false,
+                        plugins: { legend: { display: false }, tooltip: { enabled: false } },
+                        scales: {
+                            x: { display: false },
+                            y: { display: false, min: -0.01, max: 0.01 }
+                        }
+                    }
+                });
+            } else {
+                scalpingSparklineChart.data.labels = window.scalpingScoreHistory.map((_,i)=>i+1);
+                scalpingSparklineChart.data.datasets[0].data = window.scalpingScoreHistory;
+                scalpingSparklineChart.update();
+            }
+        }
+        // --- Atualização automática do painel de scalping ---
+        async function fetchAndUpdateScalpingPanel() {
+            try {
+                const res = await fetch('/api/scalping-decision');
+                const data = await res.json();
+                updateScalpingPanel(data);
+            } catch (e) {
+                // Opcional: mostrar erro
+            }
+        }
+        setInterval(fetchAndUpdateScalpingPanel, 3000); // Atualiza a cada 3s
+        fetchAndUpdateScalpingPanel();
+
+        // --- Buffer para sparkline ---
+        window.scalpingScoreHistory = window.scalpingScoreHistory || [];
+        let scalpingGaugeChart = null;
+        let scalpingSparklineChart = null;
+
+        function getScalpingZone(score) {
+            if (score < -0.005) return { tag: 'Strong Sell', color: '#e74c3c' };
+            if (score < -0.001) return { tag: 'Sell', color: '#f39c12' };
+            if (score <= 0.001 && score >= -0.001) return { tag: 'Neutral', color: '#aaa' };
+            if (score <= 0.005) return { tag: 'Buy', color: '#2ecc71' };
+            return { tag: 'Strong Buy', color: '#198754' };
+        }
+
+        function updateScalpingPanel(data) {
+            const banner = document.getElementById('scalping-banner');
+            const decisionEl = document.getElementById('scalping-decision');
+            const explEl = document.getElementById('scalping-explanation');
+            const scoreEl = document.getElementById('scalping-score-value');
+            const tagEl = document.getElementById('scalping-intensity-tag');
+            const arrowEl = document.getElementById('scalping-momentum-arrow');
+            // Cores
+            banner.className = 'recommendation-banner';
+            if (data.decision === 'BUY') banner.classList.add('status-buy');
+            else if (data.decision === 'SELL') banner.classList.add('status-sell');
+            else banner.classList.add('status-hold');
+            // Texto
+            decisionEl.textContent = data.decision || 'HOLD';
+            let explanation = '';
+            if (data.decision === 'BUY') explanation = 'Favorable conditions for scalping buy.';
+            else if (data.decision === 'SELL') explanation = 'Favorable conditions for scalping sell.';
+            else explanation = 'Scalping engine is neutral, waiting for a stronger signal.';
+            explEl.textContent = explanation;
+            // --- Gauge e Score ---
+            const score = typeof data.scalp_score === 'number' ? data.scalp_score : 0;
+            scoreEl.textContent = score.toFixed(5);
+            // --- Tag de intensidade ---
+            const zone = getScalpingZone(score);
+            tagEl.textContent = zone.tag;
+            tagEl.style.color = zone.color;
+            // --- Momentum Arrow ---
+            let momentum = typeof data.momentum === 'number' ? data.momentum : 0;
+            if (momentum > 0.002) {
+                arrowEl.innerHTML = '▲';
+                arrowEl.style.color = '#2ecc71';
+                arrowEl.style.animation = 'pulse-arrow 1s infinite';
+            } else if (momentum < -0.002) {
+                arrowEl.innerHTML = '▼';
+                arrowEl.style.color = '#e74c3c';
+                arrowEl.style.animation = 'pulse-arrow 1s infinite';
+            } else {
+                arrowEl.innerHTML = '';
+                arrowEl.style.animation = '';
+            }
+            // --- Gauge Chart ---
+            const gaugeCtx = document.getElementById('scalping-gauge').getContext('2d');
+            const gaugeValue = Math.max(-0.01, Math.min(0.01, score));
+            const gaugePercent = (gaugeValue + 0.01) / 0.02; // 0 to 1
+            const gaugeColor = zone.color;
+            if (!scalpingGaugeChart) {
+                scalpingGaugeChart = new Chart(gaugeCtx, {
+                    type: 'doughnut',
+                    data: {
+                        datasets: [{
+                            data: [gaugePercent, 1-gaugePercent],
+                            backgroundColor: [gaugeColor, '#222'],
+                            borderWidth: 0,
+                            cutout: '80%',
+                            circumference: 180,
+                            rotation: 270
+                        }]
+                    },
+                    options: {
+                        responsive: false,
+                        plugins: { legend: { display: false } },
+                        tooltips: { enabled: false },
+                    }
+                });
+            } else {
+                scalpingGaugeChart.data.datasets[0].data = [gaugePercent, 1-gaugePercent];
+                scalpingGaugeChart.data.datasets[0].backgroundColor = [gaugeColor, '#222'];
+                scalpingGaugeChart.update();
+            }
+            // --- Sparkline ---
+            window.scalpingScoreHistory.push(score);
+            if (window.scalpingScoreHistory.length > 20) window.scalpingScoreHistory.shift();
+            const sparkCtx = document.getElementById('scalping-sparkline').getContext('2d');
+            if (!scalpingSparklineChart) {
+                scalpingSparklineChart = new Chart(sparkCtx, {
+                    type: 'line',
+                    data: {
+                        labels: window.scalpingScoreHistory.map((_,i)=>i+1),
+                        datasets: [{
+                            data: window.scalpingScoreHistory,
+                            borderColor: '#0d6efd',
+                            backgroundColor: 'rgba(13,110,253,0.08)',
+                            pointRadius: 0,
+                            borderWidth: 2,
+                            tension: 0.3,
+                            fill: true
+                        }]
+                    },
+                    options: {
+                        responsive: false,
+                        plugins: { legend: { display: false }, tooltip: { enabled: false } },
+                        scales: {
+                            x: { display: false },
+                            y: { display: false, min: -0.01, max: 0.01 }
+                        }
+                    }
+                });
+            } else {
+                scalpingSparklineChart.data.labels = window.scalpingScoreHistory.map((_,i)=>i+1);
+                scalpingSparklineChart.data.datasets[0].data = window.scalpingScoreHistory;
+                scalpingSparklineChart.update();
+            }
+        }
+        // --- CSS para animação da seta de momentum ---
+        const style = document.createElement('style');
+        style.innerHTML = `@keyframes pulse-arrow { 0%,100%{transform:scale(1);} 50%{transform:scale(1.25);} }`;
+        document.head.appendChild(style);
+    </script>
+    <script>
+(function(){
+  function pad2(n) { return n < 10 ? '0'+n : n; }
+  async function updateNyMarketHours() {
+    const nyClock = document.getElementById('ny-clock-text');
+    function pad2(n) { return n < 10 ? '0'+n : n; }
+    const now = new Date();
+    const nowNY = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+    const h = pad2(nowNY.getHours());
+    const m = pad2(nowNY.getMinutes());
+    const s = pad2(nowNY.getSeconds());
+    if (nyClock) nyClock.textContent = `${h}:${m}:${s} NY`;
+    try {
+      const res = await fetch('/api/market-status');
+      const data = await res.json();
+      const ny = data['New York'] || data['NASDAQ'] || null;
+      const dot = document.getElementById('ny-status-dot');
+      const statusText = document.getElementById('ny-status-text');
+      const nyClock = document.getElementById('ny-clock-text');
+      const statusBadge = document.getElementById('ny-status-badge');
+      if (!ny) {
+        if (dot) dot.className = 'ny-status-dot';
+        if (dot) dot.style.background = '#888';
+        if (statusText) statusText.textContent = 'Indisponível';
+        if (nyClock) nyClock.textContent = '';
+        if (statusBadge) statusBadge.title = '';
+        return;
+      }
+      if (ny) {
+        // Usa data_fresh como indicador de mercado aberto
+        if (ny.data_fresh) {
+          if (dot) dot.className = 'ny-status-dot open';
+          if (statusText) statusText.textContent = 'Aberto';
+        } else {
+          if (dot) dot.className = 'ny-status-dot';
+          if (statusText) statusText.textContent = 'Fechado';
+        }
+        // ... mantém tooltip e relógio ...
+        if (ny.open && ny.next_close) {
+          const closeNY = new Date(new Date(ny.next_close).toLocaleString('en-US', { timeZone: 'America/New_York' }));
+          statusBadge.title = `Fecha às ${closeNY.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+        } else if (!ny.open && ny.next_open) {
+          const openNY = new Date(new Date(ny.next_open).toLocaleString('en-US', { timeZone: 'America/New_York' }));
+          statusBadge.title = `Abre às ${openNY.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+        } else {
+          statusBadge.title = '';
+        }
+      }
+    } catch (e) {
+      const dot = document.getElementById('ny-status-dot');
+      const statusText = document.getElementById('ny-status-text');
+      const nyClock = document.getElementById('ny-clock-text');
+      if (dot) dot.className = 'ny-status-dot';
+      if (dot) dot.style.background = '#888';
+      if (statusText) statusText.textContent = 'Erro';
+      if (nyClock) nyClock.textContent = '';
+    }
+  }
+  document.addEventListener('DOMContentLoaded', function(){
+    updateNyMarketHours();
+    setInterval(updateNyMarketHours, 1000);
+  });
+})();
+</script>
 </body>
 </html> 
