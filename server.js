@@ -47,18 +47,18 @@ let bvol24hHistory = [];
 // --- TradingView Setup ---
 const symbols = {
     Nasdaq: 'IG:NASDAQ',
-    S_P500: 'SP:SPX',
-    VIX: 'TVC:VIX',
-    DXY: 'TVC:DXY',
+    S_P500: 'SPX', // alterado de 'SP:SPX' para 'SPX'
+    VIX: 'VIX', // alterado de 'TVC:VIX' para 'VIX'
+    DXY: 'DXY', // alterado de 'TVC:DXY' para 'DXY'
     Gold: 'OANDA:XAUUSD',
     CrudeOil: 'TVC:USOIL',
     BTC: 'COINBASE:BTCUSD',
-    RUT: 'AMEX:IWM', // Russell 2000 ETF
-    T10Y2Y: 'T10Y2Y', // 10-Year Treasury Constant Maturity Minus 2-Year
-    HY_Spread: 'FRED:BAMLH0A0HYM2', // HY Credit Spread
-    MOVE: 'MOVE', // MOVE Index (testando sem prefixo)
-    BTC_Dom: 'CRYPTOCAP:BTC.D', // BTC Dominance
-    BVOL24H: 'BVOL24H:BITMEX' // Bitcoin Historical Volatility Index
+    RUT: 'AMEX:IWM', // alterado de 'AMEX:IWM' para 'RUT'
+    T10Y2Y: 'T10Y2Y',
+    HY_Spread: 'FRED:BAMLH0A0HYM2',
+    MOVE: 'MOVE',
+    BTC_Dom: 'CRYPTOCAP:BTC.D',
+    BVOL24H: 'BVOL24H:BITMEX'
 };
 // Alternative symbols (Not fully implemented for SSE yet, but kept for structure)
 const alternativeSymbols = {
@@ -114,6 +114,24 @@ const influxDB = new InfluxDB({ url: INFLUX_URL, token: INFLUX_TOKEN });
 const STATE_FILE = path.join(__dirname, 'state.json');
 
 const CANDLES_FILE = path.join(__dirname, 'candles1m_btc.json');
+
+// --- Histórico de scalp_score/momentum ---
+const SCALP_HISTORY_FILE = path.join(__dirname, 'scalp_history.jsonl');
+function saveScalpHistory(entry) {
+    fs.appendFile(SCALP_HISTORY_FILE, JSON.stringify(entry) + '\n', err => {
+        if (err) console.error('Erro ao salvar scalp_history:', err);
+    });
+}
+function loadScalpHistory(periodMinutes = 1440) {
+    if (!fs.existsSync(SCALP_HISTORY_FILE)) return [];
+    const now = Date.now();
+    const minTimestamp = now - periodMinutes * 60 * 1000;
+    return fs.readFileSync(SCALP_HISTORY_FILE, 'utf8')
+        .split('\n')
+        .filter(Boolean)
+        .map(line => { try { return JSON.parse(line); } catch { return null; } })
+        .filter(e => e && new Date(e.timestamp).getTime() >= minTimestamp);
+}
 
 // Carregar estado salvo ao iniciar
 function loadState() {
@@ -357,7 +375,7 @@ async function startRealtimeMonitoring() {
         console.warn("Previous closes store seems incomplete. Fetching them first...");
         await fetchPreviousCloses();
         if (Object.keys(previousClosesStore).length < symbolKeys.length) {
-            console.error("Still unable to fetch all previous closes. Real-time data might be inaccurate.");
+             console.error("Still unable to fetch all previous closes. Real-time data might be inaccurate.");
         } else {
             console.log("Previous closes fetched successfully before starting RT.")
         }
@@ -372,25 +390,23 @@ async function startRealtimeMonitoring() {
     for (const key of INTRADAY_SYMBOLS) {
         const tvSymbol = symbols[key];
         let previousClose = previousClosesStore[key] ?? null;
-        // Alterar para usar apenas timeframe '15' (15min) em vez de ['1', '15', '60']
         const tf = '15';
         const chartKey = `${key}_${tf}`;
-        const chart = new tvClient.Session.Chart();
+            const chart = new tvClient.Session.Chart();
         charts[chartKey] = chart;
         chart.setMarket(tvSymbol, { timeframe: tf });
-        chart.onError((...err) => {
+            chart.onError((...err) => {
+            // Remover log [DEBUG]
             try { marketUpdateEmitter.emit('error', { type: 'chart', symbol: key, timeframe: tf, message: `Chart error: ${err}` }); } catch (e) {}
             if (charts[chartKey]) { try { charts[chartKey].delete(); } catch(e){} delete charts[chartKey]; }
         });
-        chart.onUpdate(() => {
-            if (chart.periods && chart.periods.length > 0) {
-                const latestPeriod = chart.periods[0];
-                const currentPrice = latestPeriod.close ?? null;
+            chart.onUpdate(() => {
+                if (chart.periods && chart.periods.length > 0) {
+                    const latestPeriod = chart.periods[0];
+                    const currentPrice = latestPeriod.close ?? null;
                 const candleTime = latestPeriod.time || latestPeriod.timestamp || null;
-                // --- Buffer correto ---
                 let buffer = candles15m;
                 if (!buffer[key]) buffer[key] = [];
-                // Adiciona novo candle se timestamp mudou
                 const last = buffer[key][buffer[key].length - 1];
                 if (!last || last.timestamp !== candleTime) {
                     buffer[key].push({
@@ -408,25 +424,25 @@ async function startRealtimeMonitoring() {
                     last.close = latestPeriod.close;
                     if (latestPeriod.volume) last.volume += latestPeriod.volume;
                 }
-                // --- Atualiza latestMarketData APENAS para 15min (tile) ---
                 let chg = null, chg_pct = null;
                 if (chart.periods.length > 1) previousClose = chart.periods[1].close;
-                if (currentPrice !== null && previousClose !== null && previousClose !== 0) {
-                    chg = currentPrice - previousClose;
-                    chg_pct = (chg / previousClose) * 100;
-                }
-                latestMarketData[key] = {
-                    price: currentPrice,
-                    chg: chg,
-                    chg_pct: chg_pct,
+                    if (currentPrice !== null && previousClose !== null && previousClose !== 0) {
+                        chg = currentPrice - previousClose;
+                        chg_pct = (chg / previousClose) * 100;
+                    }
+                    latestMarketData[key] = {
+                        price: currentPrice,
+                        chg: chg,
+                        chg_pct: chg_pct,
                     prevClose: previousClose,
                     last_update: Date.now()
-                };
-                latestSignals = calculateSignals(latestMarketData);
-                marketUpdateEmitter.emit('update', { type: 'full', data: latestSignals });
+                    };
+                    latestSignals = calculateSignals(latestMarketData);
+                    marketUpdateEmitter.emit('update', { type: 'full', data: latestSignals });
+                } else {
             }
         });
-        console.log(` -> Chart session established for ${key} (${tf})`);
+        // Removido log [DEBUG]
         await new Promise(resolve => setTimeout(resolve, 100));
     }
     // --- DAILY SYMBOLS ---
@@ -439,6 +455,7 @@ async function startRealtimeMonitoring() {
         charts[chartKey] = chart;
         chart.setMarket(tvSymbol, { timeframe: 'D' });
         chart.onError((...err) => {
+            // Removido log [DEBUG]
             try { marketUpdateEmitter.emit('error', { type: 'chart', symbol: key, timeframe: 'D', message: `Chart error: ${err}` }); } catch (e) {}
             if (charts[chartKey]) { try { charts[chartKey].delete(); } catch(e){} delete charts[chartKey]; }
         });
@@ -465,9 +482,10 @@ async function startRealtimeMonitoring() {
                     last.close = latestPeriod.close;
                     if (latestPeriod.volume) last.volume += latestPeriod.volume;
                 }
+            } else {
             }
         });
-        console.log(` -> Chart session established for ${key} (D)`);
+        // Removido log [DEBUG]
         await new Promise(resolve => setTimeout(resolve, 100));
     }
     // --- BTC 5m Candle ---
@@ -505,6 +523,111 @@ async function startRealtimeMonitoring() {
         }
     });
     console.log(' -> Chart session established for BTC (5m)');
+    await new Promise(resolve => setTimeout(resolve, 100));
+    // --- BTC 1m Candle ---
+    const btc1mChartKey = 'BTC_1';
+    const btc1mChart = new tvClient.Session.Chart();
+    charts[btc1mChartKey] = btc1mChart;
+    btc1mChart.setMarket(symbols['BTC'], { timeframe: '1' });
+    btc1mChart.onError((...err) => {
+        try { marketUpdateEmitter.emit('error', { type: 'chart', symbol: 'BTC', timeframe: '1', message: `Chart error: ${err}` }); } catch (e) {}
+        if (charts[btc1mChartKey]) { try { charts[btc1mChartKey].delete(); } catch(e){} delete charts[btc1mChartKey]; }
+    });
+    btc1mChart.onUpdate(() => {
+        if (btc1mChart.periods && btc1mChart.periods.length > 0) {
+            const latestPeriod = btc1mChart.periods[0];
+            const candleTime = latestPeriod.time || latestPeriod.timestamp || null;
+            if (!candles1m['BTC']) candles1m['BTC'] = [];
+            const last = candles1m['BTC'][candles1m['BTC'].length - 1];
+            if (!last || last.timestamp !== candleTime) {
+                candles1m['BTC'].push({
+                    timestamp: candleTime,
+                    open: latestPeriod.open,
+                    high: latestPeriod.max ?? latestPeriod.high,
+                    low: latestPeriod.min ?? latestPeriod.low,
+                    close: latestPeriod.close,
+                    volume: latestPeriod.volume || 0
+                });
+                if (candles1m['BTC'].length > 2000) candles1m['BTC'].shift();
+            } else {
+                last.high = Math.max(last.high, latestPeriod.max ?? latestPeriod.high);
+                last.low = Math.min(last.low, latestPeriod.min ?? latestPeriod.low);
+                last.close = latestPeriod.close;
+                if (latestPeriod.volume) last.volume += latestPeriod.volume;
+            }
+        }
+    });
+    console.log(' -> Chart session established for BTC (1m)');
+    await new Promise(resolve => setTimeout(resolve, 100));
+    // --- BTC 15m Candle ---
+    const btc15mChartKey = 'BTC_15';
+    const btc15mChart = new tvClient.Session.Chart();
+    charts[btc15mChartKey] = btc15mChart;
+    btc15mChart.setMarket(symbols['BTC'], { timeframe: '15' });
+    btc15mChart.onError((...err) => {
+        try { marketUpdateEmitter.emit('error', { type: 'chart', symbol: 'BTC', timeframe: '15', message: `Chart error: ${err}` }); } catch (e) {}
+        if (charts[btc15mChartKey]) { try { charts[btc15mChartKey].delete(); } catch(e){} delete charts[btc15mChartKey]; }
+    });
+    btc15mChart.onUpdate(() => {
+        if (btc15mChart.periods && btc15mChart.periods.length > 0) {
+            const latestPeriod = btc15mChart.periods[0];
+            const candleTime = latestPeriod.time || latestPeriod.timestamp || null;
+            if (!candles15m['BTC']) candles15m['BTC'] = [];
+            const last = candles15m['BTC'][candles15m['BTC'].length - 1];
+            if (!last || last.timestamp !== candleTime) {
+                candles15m['BTC'].push({
+                    timestamp: candleTime,
+                    open: latestPeriod.open,
+                    high: latestPeriod.max ?? latestPeriod.high,
+                    low: latestPeriod.min ?? latestPeriod.low,
+                    close: latestPeriod.close,
+                    volume: latestPeriod.volume || 0
+                });
+                if (candles15m['BTC'].length > 200) candles15m['BTC'].shift();
+            } else {
+                last.high = Math.max(last.high, latestPeriod.max ?? latestPeriod.high);
+                last.low = Math.min(last.low, latestPeriod.min ?? latestPeriod.low);
+                last.close = latestPeriod.close;
+                if (latestPeriod.volume) last.volume += latestPeriod.volume;
+            }
+        }
+    });
+    console.log(' -> Chart session established for BTC (15m)');
+    await new Promise(resolve => setTimeout(resolve, 100));
+    // --- BTC 1h Candle ---
+    const btc1hChartKey = 'BTC_1h';
+    const btc1hChart = new tvClient.Session.Chart();
+    charts[btc1hChartKey] = btc1hChart;
+    btc1hChart.setMarket(symbols['BTC'], { timeframe: '60' });
+    btc1hChart.onError((...err) => {
+        try { marketUpdateEmitter.emit('error', { type: 'chart', symbol: 'BTC', timeframe: '60', message: `Chart error: ${err}` }); } catch (e) {}
+        if (charts[btc1hChartKey]) { try { charts[btc1hChartKey].delete(); } catch(e){} delete charts[btc1hChartKey]; }
+    });
+    btc1hChart.onUpdate(() => {
+        if (btc1hChart.periods && btc1hChart.periods.length > 0) {
+            const latestPeriod = btc1hChart.periods[0];
+            const candleTime = latestPeriod.time || latestPeriod.timestamp || null;
+            if (!candles1h['BTC']) candles1h['BTC'] = [];
+            const last = candles1h['BTC'][candles1h['BTC'].length - 1];
+            if (!last || last.timestamp !== candleTime) {
+                candles1h['BTC'].push({
+                    timestamp: candleTime,
+                    open: latestPeriod.open,
+                    high: latestPeriod.max ?? latestPeriod.high,
+                    low: latestPeriod.min ?? latestPeriod.low,
+                    close: latestPeriod.close,
+                    volume: latestPeriod.volume || 0
+                });
+                if (candles1h['BTC'].length > 200) candles1h['BTC'].shift();
+            } else {
+                last.high = Math.max(last.high, latestPeriod.max ?? latestPeriod.high);
+                last.low = Math.min(last.low, latestPeriod.min ?? latestPeriod.low);
+                last.close = latestPeriod.close;
+                if (latestPeriod.volume) last.volume += latestPeriod.volume;
+            }
+        }
+    });
+    console.log(' -> Chart session established for BTC (1h)');
     await new Promise(resolve => setTimeout(resolve, 100));
     console.log("Real-time monitoring setup complete for all symbols.");
 }
@@ -562,10 +685,10 @@ function calculateSignals(currentMarketData) {
             }
         } else {
             if (latestSignals[key]) {
-                trend = latestSignals[key].trend || 'neutral';
-                signal_emoji = latestSignals[key].signal || '⚪';
-                finalScore = latestSignals[key].score || 0;
-            }
+                 trend = latestSignals[key].trend || 'neutral';
+                 signal_emoji = latestSignals[key].signal || '⚪';
+                 finalScore = latestSignals[key].score || 0;
+             }
         }
 
         signals[key] = {
@@ -867,7 +990,7 @@ app.get('/api/binance-open-interest', async (req, res) => {
 
 // Endpoint para Basis (Premium/Discount) XBTUSD PERP vs Spot usando BitMEX
 app.get('/api/basis-premium', async (req, res) => {
-    try {
+  try {
         // Preço PERP (XBTUSD)
         const perpResp = await axios.get('https://www.bitmex.com/api/v1/instrument?symbol=XBTUSD');
         // Preço Spot (índice .BXBT)
@@ -880,15 +1003,15 @@ app.get('/api/basis-premium', async (req, res) => {
         const spot = spotResp.data[0].lastPrice;
         const basis = perp - spot;
         const basis_percent = (basis / spot) * 100;
-        res.json({
-            spot,
-            perp,
-            basis_percent,
+    res.json({
+      spot,
+      perp,
+      basis_percent,
             basis
-        });
-    } catch (err) {
-        res.status(500).json({ error: err.toString() });
-    }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.toString() });
+  }
 });
 
 // NOVO: Endpoint para os dados de Funding Score (proxy para a API Python)
@@ -1120,7 +1243,7 @@ app.listen(port, '0.0.0.0', async () => {
     } catch (error) {
         console.error("!!! Error during server startup sequence:", error, "!!!");
     }
-});
+}); 
 
 // Função para buscar BVOL24H do BitMEX (usando símbolo oficial .BVOL24H)
 async function fetchBVOL24HFromBitmex() {
@@ -1340,7 +1463,7 @@ async function sendDiscordAlert(decision, explanation) {
       }]
     });
   } catch (e) {
-    console.error('Erro ao enviar alerta para Discord:', e.message);
+    console.error('Erro ao enviar alerta para Discord:', e.message, e.response?.data);
   }
 }
 
@@ -1358,8 +1481,44 @@ const oiBuffer = [];
 const basisBuffer = [];
 const fundingBuffer = [];
 const scalpScoreBuffer = [];
+let lastScalpHistoryMinute = null;
+
+// --- Buffers e variáveis para filtros de sinal ---
+const scalpEmaBuffer = [];
+let lastFilteredSignal = 'HOLD';
+let debounceBuffer = [];
+let lastSignalTime = 0;
+let lastSignalType = 'HOLD';
+let lastEma = null;
+let lastRawScore = null;
+let lastMomentum = 0;
+
+function calcEMA(buffer, alpha = 0.5) {
+    if (buffer.length === 0) return 0;
+    let ema = buffer[0];
+    for (let i = 1; i < buffer.length; i++) {
+        ema = alpha * buffer[i] + (1 - alpha) * ema;
+    }
+    return ema;
+}
+
+// --- MT4 Integration: variável global para última ordem ---
+let lastMt4Order = { action: 'HOLD', entry_price: null, stop_loss: null, take_profit: null };
+// --- Proteção contra whipsaws: cooldown após stop loss ---
+let lastStopLossTime = 0;
 
 app.get('/api/scalping-decision', (req, res) => {
+    // initialize debug object for filters
+    let filters_debug = {};
+    // capture current timestamp for stop loss cooldown check
+    const nowMs2 = Date.now();
+    // define trendOverride flag from query parameters or default to false
+    let trendOverride = false;
+    if (req.query.trendOverride === 'true' || req.query.trendOverride === '1') {
+        trendOverride = true;
+    }
+    // define cooldown duration after stop loss (milliseconds)
+    const COOLDOWN_STOPLOSS_MS = 10000;
     // --- 1. Pega candles de 1m e 5m ---
     const c1m = candles1m['BTC'] || [];
     const c5m = candles5m['BTC'] || [];
@@ -1428,48 +1587,227 @@ app.get('/api/scalping-decision', (req, res) => {
     }
     // --- 4. Pesos ---
     const w_1m = 0.6, w_5m = 0.4;
-    const priceW = 0.5, volW = 0.3, basisW = 0.1, fundingW = 0.05, oiW = 0.05;
+    const priceW = 0.8, volW = 0.1, basisW = 0.1, fundingW = 0.05, oiW = 0.05, w_book = 0.1;
+    // --- Book Pressure ---
+    let book_pressure_now = null, book_pressure_prev = null;
+    if (Array.isArray(bookPressureHistory) && bookPressureHistory.length > 0) {
+        book_pressure_now = bookPressureHistory[bookPressureHistory.length - 1].value;
+        // Busca o valor mais próximo de 1 período atrás (1 segundo)
+        const now = Date.now();
+        let prev = null;
+        for (let i = bookPressureHistory.length - 2; i >= 0; i--) {
+            if (now - bookPressureHistory[i].timestamp >= 1000) {
+                prev = bookPressureHistory[i].value;
+                break;
+            }
+        }
+        book_pressure_prev = prev !== null ? prev : book_pressure_now;
+    }
+    // Normalização opcional (já está entre -1 e +1)
+    const book_score = book_pressure_now ?? 0;
     // --- 5. Score de cada TF ---
     const tf_score_1m = priceW * pctPrice_1m + volW * pctVol_1m;
     const tf_score_5m = priceW * pctPrice_5m + volW * pctVol_5m;
+    // --- Whale Flow (últimos 60s) ---
+    const now = Date.now();
+    const oneMinuteAgo = now - 60 * 1000;
+    const recentWhales = whaleFlowBuffer.filter(e => e.timestamp >= oneMinuteAgo);
+    let smallFlow = 0, mediumFlow = 0, largeFlow = 0;
+    for (const tx of recentWhales) {
+        const btc = tx.value / 1e8;
+        if (btc >= 20 && btc < 50) smallFlow += btc;
+        else if (btc >= 50 && btc < 100) mediumFlow += btc;
+        else if (btc >= 100) largeFlow += btc;
+    }
+    const whaleScoreRaw = smallFlow * 0.02 + mediumFlow * 0.05 + largeFlow * 0.10;
+    const whaleScore = whaleScoreRaw / 100;
+    const w_whale = 0.1;
+    // --- Trend Score dos últimos 3 candles 1m e 5m ---
+    let trend_score = 0;
+    function getTrendBonus(candles) {
+        if (candles.length < 3) return 0;
+        const last3 = candles.slice(-3);
+        const ups = last3.every(c => c.close > c.open);
+        const downs = last3.every(c => c.close < c.open);
+        if (ups) return 0.005;
+        if (downs) return -0.005;
+        return 0;
+    }
+    trend_score += getTrendBonus(c1m);
+    trend_score += getTrendBonus(c5m);
+    const w_trend = 0.05;
     // --- 6. Score total do scalping ---
     const scalp_score =
         w_1m * tf_score_1m +
         w_5m * tf_score_5m +
         basisW   * basis_score +
         fundingW * funding_score +
-        oiW      * oi_score;
-    // Buffer de momentum
-    scalpScoreBuffer.push(scalp_score);
+        oiW      * oi_score +
+        w_trend  * trend_score; // book/whale removidos do score
+    // --- Filtros de sinal ---
+    // 1. EMA rápida (α=0.5)
+    scalpEmaBuffer.push(scalp_score);
+    if (scalpEmaBuffer.length > 5) scalpEmaBuffer.shift();
+    const scalp_ema = calcEMA(scalpEmaBuffer, 0.5);
+    // 2. Momentum (velocidade)
+    lastMomentum = lastEma !== null ? scalp_ema - lastEma : 0;
+    lastEma = scalp_ema;
+    // 3. Debounce de 2 ciclos
+    let rawSignal = 'HOLD';
+    if (scalp_ema > 0.001) rawSignal = 'BUY';
+    else if (scalp_ema < -0.001) rawSignal = 'SELL';
+    debounceBuffer.push(rawSignal);
+    if (debounceBuffer.length > 2) debounceBuffer.shift();
+    let filteredSignal = 'HOLD';
+    if (debounceBuffer[0] === debounceBuffer[1] && debounceBuffer[0] !== 'HOLD') {
+        filteredSignal = debounceBuffer[0];
+    }
+    // --- Filtro de tendência: só permite SELL se pelo menos 2 dos últimos 3 candles forem de baixa ---
+    if (filteredSignal === 'SELL' && c1m.length >= 3) {
+        let downCandles = 0;
+        for (let i = c1m.length - 3; i < c1m.length; i++) {
+            if (c1m[i].close < c1m[i].open) downCandles++;
+        }
+        if (downCandles < 2) filteredSignal = 'HOLD';
+    }
+    // 4. Cool-down de 10s entre reversões (exceto se momentum forte)
+    const nowMs = Date.now();
+    let cooldownActive = false;
+    if (filteredSignal !== lastSignalType && lastSignalType !== 'HOLD') {
+        if (nowMs - lastSignalTime < 10000) {
+            cooldownActive = true;
+            filteredSignal = lastSignalType;
+        } else {
+            lastSignalTime = nowMs;
+            lastSignalType = filteredSignal;
+        }
+    } else if (nowMs - lastSignalTime < 10000 && lastSignalType !== 'HOLD') {
+        cooldownActive = true;
+    }
+    // 5. Classificação de força
+    let signalStrength = 'none';
+    if (Math.abs(scalp_ema) >= 0.001 && Math.abs(scalp_ema) < 0.002) signalStrength = 'weak';
+    if (Math.abs(scalp_ema) >= 0.002) signalStrength = 'strong';
+    // 6. Classificação de momentum com rótulos intuitivos
+    let signalMomentum = 'flat';
+    if (filteredSignal === 'SELL') {
+        if (lastMomentum !== null && lastMomentum < -0.002) signalMomentum = 'fast sell';
+        else if (lastMomentum !== null && lastMomentum > 0.002) signalMomentum = 'slowing sell';
+    } else if (filteredSignal === 'BUY') {
+        if (lastMomentum !== null && lastMomentum > 0.002) signalMomentum = 'fast buy';
+        else if (lastMomentum !== null && lastMomentum < -0.002) signalMomentum = 'slowing buy';
+    }
+    // --- Persistência do histórico a cada candle (1m) ---
+    const nowMinute = Math.floor(Date.now() / 60000);
     if (scalpScoreBuffer.length > 2) scalpScoreBuffer.shift();
+    scalpScoreBuffer.push(scalp_score);
     let momentum = null;
     if (scalpScoreBuffer.length >= 2) {
-        momentum = scalpScoreBuffer[1] - scalpScoreBuffer[0];
+        momentum = scalpScoreBuffer[scalpScoreBuffer.length - 1] - scalpScoreBuffer[scalpScoreBuffer.length - 2];
     }
+    if (momentum === undefined) momentum = null;
     // --- 7. Threshold ---
     const THRESHOLD = 0.001;
     let decision = 'HOLD';
     if (scalp_score > THRESHOLD) decision = 'BUY';
     else if (scalp_score < -THRESHOLD) decision = 'SELL';
-    // --- LOG DETALHADO ---
-    console.log('--- [SCALP DEBUG] ---');
-    console.log(`[1m] close_prev=${close_prev_1m}, close_now=${close_now_1m}, pctPrice_1m=${pctPrice_1m}`);
-    console.log(`[1m] avgVol_1m=${avgVol_1m}, vol_now_1m=${vol_now_1m}, pctVol_1m=${pctVol_1m}`);
-    console.log(`[5m] close_prev=${close_prev_5m}, close_now=${close_now_5m}, pctPrice_5m=${pctPrice_5m}`);
-    console.log(`[5m] avgVol_5m=${avgVol_5m}, vol_now_5m=${vol_now_5m}, pctVol_5m=${pctVol_5m}`);
-    console.log(`tf_score_1m = ${priceW} * ${pctPrice_1m} + ${volW} * ${pctVol_1m} = ${tf_score_1m}`);
-    console.log(`tf_score_5m = ${priceW} * ${pctPrice_5m} + ${volW} * ${pctVol_5m} = ${tf_score_5m}`);
-    console.log(`basis_score = (basis_now=${basisBuffer[1] ?? basis_now}, basis_prev=${basisBuffer[0] ?? basis_now}) => ${basis_score}`);
-    console.log(`funding_score = (funding_now=${fundingBuffer[1] ?? funding_now}, funding_prev=${fundingBuffer[0] ?? funding_now}) => ${funding_score}`);
-    console.log(`oi_score = (oi_now=${oiBuffer[1] ?? oi_now}, oi_prev=${oiBuffer[0] ?? oi_now}) => ${oi_score}`);
-    console.log(`scalp_score = ${w_1m}*${tf_score_1m} + ${w_5m}*${tf_score_5m} + ${basisW}*${basis_score} + ${fundingW}*${funding_score} + ${oiW}*${oi_score} = ${scalp_score}`);
-    if (momentum !== null) console.log(`momentum = scalp_score_now - scalp_score_prev = ${momentum}`);
-    console.log(`threshold = ${THRESHOLD}, decision = ${decision}`);
-    console.log('---------------------');
     // --- 8. Resposta detalhada ---
+    // --- ATR(14) de 1m para SL/TP ---
+    function calcATR(candles, period = 14) {
+        if (candles.length < period + 1) return null;
+        let trs = [];
+        for (let i = candles.length - period; i < candles.length; i++) {
+            const c = candles[i];
+            const prev = candles[i - 1];
+            if (!c || !prev) continue;
+            const tr = Math.max(
+                c.high - c.low,
+                Math.abs(c.high - prev.close),
+                Math.abs(c.low - prev.close)
+            );
+            trs.push(tr);
+        }
+        if (trs.length < period) return null;
+        return trs.reduce((a, b) => a + b, 0) / trs.length;
+    }
+    let entryPrice = null, stopLoss = null, takeProfit = null;
+    const atr1m = calcATR(c1m, 14);
+    // --- Filtros adicionais ---
+    let healthyVolatility = false;
+    let multiTFConfirm = false;
+    let healthyVolume = false;
+    // 1. Volatilidade saudável (ATR entre 0.02% e 1.5% do preço)
+    if (c1m.length > 0 && atr1m !== null) {
+        const price = c1m[c1m.length-1].close;
+        const atrPct = price ? (atr1m / price) * 100 : 0;
+        healthyVolatility = (atrPct > 0.02 && atrPct < 1.5);
+    }
+    // 2. Confirmação multi-timeframe
+    if (c1m.length > 0 && c5m.length > 0) {
+        const c1 = c1m[c1m.length-1];
+        const c5 = c5m[c5m.length-1];
+        if (filteredSignal === 'BUY') {
+            multiTFConfirm = (c1.close > c1.open && c5.close > c5.open);
+        } else if (filteredSignal === 'SELL') {
+            multiTFConfirm = (c1.close < c1.open && c5.close < c5.open);
+        } else {
+            multiTFConfirm = true;
+        }
+    }
+    // 3. Filtro de volume (volume atual > 80% da média dos últimos 20 candles)
+    if (c1m.length >= 20) {
+        const vols = c1m.slice(-20).map(c => c.volume);
+        const avgVol = vols.reduce((a, b) => a + b, 0) / vols.length;
+        const volNow = c1m[c1m.length-1].volume;
+        healthyVolume = (volNow > avgVol * 0.8);
+    }
+    filters_debug.trendOverride = trendOverride;
+    // Aplica filtros apenas se não houver override de tendência
+    if (!trendOverride && (!healthyVolatility || !multiTFConfirm || !healthyVolume)) {
+        filteredSignal = 'HOLD';
+        filters_debug.confluence_pass = false;
+    }
+    // Proteção contra whipsaws: cooldown após stop loss
+    if (nowMs2 - lastStopLossTime < COOLDOWN_STOPLOSS_MS) {
+        filteredSignal = 'HOLD';
+        filters_debug.cooldownStopLoss = true;
+    }
+    // --- Score de Confluência ---
+    // Usa o controle dinâmico pelo isConfluenceEnabled global
+    if (!isConfluenceEnabled) {
+        // filtro completamente ignorado
+    } else if (filteredSignal === 'BUY' || filteredSignal === 'SELL') {
+        let aligned = 0;
+        if (filteredSignal === 'BUY') {
+            if (pctPrice_1m > 0) aligned++;
+            if (pctVol_1m > 0) aligned++;
+            if (book_score > 0) aligned++;
+            if (whaleScore > 0) aligned++;
+            if (aligned < 3) {
+                filteredSignal = 'HOLD';
+                filters_debug.confluence_pass = false;
+            }
+        } else if (filteredSignal === 'SELL') {
+            if (pctPrice_1m < 0) aligned++;
+            if (pctVol_1m < 0) aligned++;
+            if (book_score < 0) aligned++;
+            if (aligned < 2) {
+                filteredSignal = 'HOLD';
+                filters_debug.confluence_pass = false;
+            }
+        }
+        // Se falhou confluence, bloqueia e marca false
+        // Caso contrário confluence_pass permanece true
+    }
     res.json({
         decision,
         scalp_score: +scalp_score.toFixed(5),
+        scalp_ema: +scalp_ema.toFixed(5),
+        scalp_signal_raw: rawSignal,
+        scalp_signal_filtered: filteredSignal,
+        scalp_signal_strength: signalStrength,
+        scalp_signal_momentum: signalMomentum,
+        scalp_signal_cooldown: cooldownActive,
         tf_score_1m: +tf_score_1m.toFixed(5),
         tf_score_5m: +tf_score_5m.toFixed(5),
         basis_score: +basis_score.toFixed(5),
@@ -1485,9 +1823,30 @@ app.get('/api/scalping-decision', (req, res) => {
         funding_now: fundingBuffer[1] ?? funding_now, funding_prev: fundingBuffer[0] ?? funding_now,
         oi_now: oiBuffer[1] ?? oi_now, oi_prev: oiBuffer[0] ?? oi_now,
         momentum: momentum !== null ? +momentum.toFixed(5) : null,
-        weights: { w_1m, w_5m, priceW, volW, basisW, fundingW, oiW },
-        threshold: THRESHOLD
+        weights: { w_1m, w_5m, priceW, volW, basisW, fundingW, oiW, w_book, w_whale },
+        threshold: THRESHOLD,
+        // Novos campos de Book Pressure
+        book_pressure_now: book_pressure_now !== null ? +book_pressure_now.toFixed(3) : null,
+        book_pressure_prev: book_pressure_prev !== null ? +book_pressure_prev.toFixed(3) : null,
+        book_score: book_score !== null ? +book_score.toFixed(3) : null,
+        // Whale Flow
+        whale_flow: {
+            small: +smallFlow.toFixed(2),
+            medium: +mediumFlow.toFixed(2),
+            large: +largeFlow.toFixed(2)
+        },
+        whale_score: +whaleScore.toFixed(3),
+        trend_score: +trend_score.toFixed(5),
+        w_trend,
+        entry_price: entryPrice,
+        stop_loss: stopLoss,
+        take_profit: takeProfit,
+        atr_1m: atr1m,
+        confluence_enabled: isConfluenceEnabled,
+        filters_debug // <-- novo campo
     });
+    // DEBUG: Logar timestamps e closes dos candles1m['BTC']
+    // Removido conforme solicitado
 });
 
 const SCALPING_DISCORD_WEBHOOK_URL = 'https://discord.com/api/webhooks/1363915609284280433/oUAHp6Ps4OpVWG8AT-595OMq5giUebbEMvbnUSzn_MUVVq7nIWAFidzZng0T-pzxN36R';
@@ -1511,7 +1870,7 @@ async function sendScalpingDiscordAlert(decision, explanation) {
       }]
     });
   } catch (e) {
-    console.error('Erro ao enviar alerta do scalping para Discord:', e.message);
+    console.error('Erro ao enviar alerta do scalping para Discord:', e.message, e.response?.data);
   }
 }
 
@@ -1603,155 +1962,42 @@ function startBookPressureBinance() {
 
 startBookPressureBinance();
 
-// --- WhaleFlow via mempool.space WebSocket ---
-let whaleFlowBuffer = [];
-
-function startWhaleFlowMempool() {
-    const ws = new WebSocket('wss://mempool.space/api/v1/ws');
+// --- WhaleFlow via blockchain.com WebSocket ---
+function startWhaleFlowBlockchain() {
+    const ws = new WebSocket('wss://ws.blockchain.info/inv');
     ws.on('open', () => {
-        console.log('[WhaleFlow] WebSocket mempool.space conectado.');
-        ws.send(JSON.stringify({ op: 'new_tx' }));
+        console.log('[WhaleFlow] WebSocket blockchain.info conectado.');
+        ws.send(JSON.stringify({ op: 'unconfirmed_sub' }));
     });
-    ws.on('message', ({ data }) => {
+    ws.on('message', (data) => {
         try {
-            const tx = JSON.parse(data);
-            if (tx.total_output && tx.total_output > 100 * 1e8) {
-                whaleFlowBuffer.push({
-                    value: tx.total_output,
-                    timestamp: Date.now()
-                });
-                console.log(`[WhaleFlow] TX baleia detectada: ${(tx.total_output / 1e8).toFixed(2)} BTC`);
-                // Log detalhado para validação
-                console.log('[WHALE-DETECT]', tx.total_output, 'sats', (tx.total_output / 1e8).toFixed(2), 'BTC');
+            const msg = JSON.parse(data);
+            if (msg.op === 'utx' && msg.x && Array.isArray(msg.x.out)) {
+                const total = msg.x.out.reduce((sum, o) => sum + (o.value || 0), 0);
+                if (total > 1 * 1e8) {
+                    whaleFlowBuffer.push({
+                        value: total,
+                        timestamp: Date.now()
+                    });
+                    // Removido log do WhaleFlow
+                }
             }
         } catch (e) {
             // Ignora parse errors
         }
     });
     ws.on('close', () => {
-        console.log('[WhaleFlow] WebSocket mempool.space desconectado. Reconectando em 5s...');
-        setTimeout(startWhaleFlowMempool, 5000);
+        console.log('[WhaleFlow] WebSocket blockchain.info desconectado. Reconectando em 5s...');
+        setTimeout(startWhaleFlowBlockchain, 5000);
     });
     ws.on('error', (err) => {
         console.error('[WhaleFlow] WebSocket erro:', err);
         ws.close();
     });
-    // Removido o setInterval de fake whale
 }
 // Zerar o buffer ao inicializar
 whaleFlowBuffer = [];
-
-// Atualiza WhaleFlow a cada 10s (janela de 5 minutos)
-setInterval(() => {
-    const now = Date.now();
-    // Remove entradas mais antigas que 5 minutos
-    whaleFlowBuffer = whaleFlowBuffer.filter(e => now - e.timestamp <= 5 * 60 * 1000);
-    const sum = whaleFlowBuffer.reduce((a, b) => a + b.value, 0);
-    // Normaliza por 1000 BTC (em satoshis)
-    const normalized = sum / (1000 * 1e8);
-    if (!latestSignals.BTC) latestSignals.BTC = {};
-    latestSignals.BTC.whale_flow = normalized;
-    // Emitir atualização para o frontend
-    marketUpdateEmitter.emit('update', { type: 'full', data: latestSignals });
-    console.log(`[WhaleFlow] Atualizado: ${normalized.toFixed(4)} (soma: ${(sum / 1e8).toFixed(2)} BTC, buffer: ${whaleFlowBuffer.length} txs)`);
-}, 10000);
-
-// Endpoint para debug do WhaleFlow
-app.get('/api/whaleflow', (req, res) => {
-    res.json({
-        whale_flow: latestSignals.BTC?.whale_flow ?? null,
-        buffer_count: whaleFlowBuffer.length
-    });
-});
-
-// Endpoint para injetar uma transação fake de baleia para teste
-app.post('/api/whaleflow-test', (req, res) => {
-    const now = Date.now();
-    // 1 BTC em satoshis
-    whaleFlowBuffer.push({
-        value: 1 * 1e8,
-        timestamp: now
-    });
-    res.json({ status: 'ok', message: 'Fake whale tx (1 BTC) injected', buffer_count: whaleFlowBuffer.length });
-});
-
-/**
- * Calcula o ATR (Average True Range) dos últimos N candles de 15m do símbolo.
- * @param {string} symbol - Ex: 'BTC', 'Nasdaq', etc.
- * @param {number} length - Número de candles (ex: 14)
- * @returns {number|null} ATR absoluto
- */
-function calculateATR15m(symbol, length = 14) {
-    const candles = candles15m[symbol] || [];
-    if (candles.length < length + 1) return null;
-    let trs = [];
-    for (let i = candles.length - length; i < candles.length; i++) {
-        const c = candles[i];
-        const prev = candles[i - 1];
-        if (!c || !prev) continue;
-        const tr = Math.max(
-            c.high - c.low,
-            Math.abs(c.high - prev.close),
-            Math.abs(c.low - prev.close)
-        );
-        trs.push(tr);
-    }
-    if (trs.length < length) return null;
-    return trs.reduce((a, b) => a + b, 0) / trs.length;
-}
-
-/**
- * Calcula o VWAP das últimas N candles de 15m do símbolo.
- * @param {string} symbol - Ex: 'BTC', 'Nasdaq', etc.
- * @param {number} length - Número de candles (ex: 20)
- * @returns {number|null} VWAP
- */
-function calculateVWAP15m(symbol, length = 20) {
-    const candles = candles15m[symbol] || [];
-    if (candles.length < length) return null;
-    let sumPV = 0, sumV = 0;
-    for (let i = candles.length - length; i < candles.length; i++) {
-        const c = candles[i];
-        if (c && c.close && c.volume) {
-            sumPV += c.close * c.volume;
-            sumV += c.volume;
-        }
-    }
-    return sumV > 0 ? sumPV / sumV : null;
-}
-
-/**
- * Calcula a média móvel simples de um array de valores.
- * @param {number[]} arr - Array de números
- * @param {number} len - Comprimento da média
- * @returns {number|null}
- */
-function simpleMA(arr, len) {
-    if (!arr || arr.length < len) return null;
-    const slice = arr.slice(-len);
-    return slice.reduce((a, b) => a + b, 0) / len;
-}
-
-/**
- * Calcula a variação percentual entre o último e o N-ésimo candle anterior.
- * @param {Array} candles - Array de candles com campo close
- * @param {number} minutes - Quantos candles atrás comparar (default 3)
- * @returns {number|null}
- */
-function calcRollingScore(candles, minutes = 3) {
-    if (!candles || candles.length < minutes) return null;
-    const last = candles.at(-1);
-    const prev = candles.at(-minutes);
-    if (!last || !prev || !prev.close) return null;
-    return ((last.close - prev.close) / prev.close) * 100;
-}
-
-// Exporta funções para uso em scripts externos (ex: backtest)
-module.exports = {
-  calculateATR15m,
-  calculateVWAP15m,
-  simpleMA
-};
+startWhaleFlowBlockchain();
 
 // --- NOVO MACRO-ENGINE latest-decision ---
 
@@ -1782,6 +2028,14 @@ function getPctChange(now, prev) {
 if (!global.lastTotalScore) global.lastTotalScore = 0;
 const VEL_THRESHOLD = 0.3;
 
+function getGlobalZone(score) {
+    if (score < -0.05) return { tag: 'Strong Sell', color: '#e74c3c' };
+    if (score < -0.01) return { tag: 'Weak Sell', color: '#f39c12' };
+    if (score <= 0.01 && score >= -0.01) return { tag: 'Neutral', color: '#aaa' };
+    if (score <= 0.05) return { tag: 'Weak Buy', color: '#2ecc71' };
+    return { tag: 'Strong Buy', color: '#198754' };
+}
+
 function macroEngine(currentMarketData) {
   let total_score = 0;
   let breakdown = {};
@@ -1804,7 +2058,8 @@ function macroEngine(currentMarketData) {
       // DEBUG LOG solicitado
       const prevTs = data.prev_timestamp ? new Date(data.prev_timestamp).toISOString() : 'N/A';
       const currTs = data.curr_timestamp ? new Date(data.curr_timestamp).toISOString() : 'N/A';
-      console.log(`[DEBUG][${idx.key}][${tf}] prev_close=${data.close_prev} (${prevTs}), curr_close=${data.close_now} (${currTs}), pctPrice=${pctPrice >= 0 ? '+' : ''}${pctPrice.toFixed(6)}`);
+      // [DEBUG LOG solicitado]
+      // console.log(`[DEBUG][${idx.key}][${tf}] prev_close=${data.close_prev} (${prevTs}), curr_close=${data.close_now} (${currTs}), pctPrice=${pctPrice >= 0 ? '+' : ''}${pctPrice.toFixed(6)}`);
       let pctVol = 0;
       let priceW = PRICE_WEIGHT, volW = VOLUME_WEIGHT;
       // Calcular média de volume no TF se houver série de volume
@@ -1831,20 +2086,31 @@ function macroEngine(currentMarketData) {
   const velocity = typeof global.lastTotalScore === 'number' ? (total_score - global.lastTotalScore) : 0;
   global.lastTotalScore = total_score;
   // ---
+  // --- Decisão textual e zona ---
+  const zone = getGlobalZone(total_score);
   let decision = 'HOLD';
-  if (total_score >= 1) decision = 'BUY';
-  else if (total_score <= -1) decision = 'SELL';
+  if (zone.tag === 'Strong Buy' || zone.tag === 'Weak Buy') decision = 'BUY';
+  else if (zone.tag === 'Strong Sell' || zone.tag === 'Weak Sell') decision = 'SELL';
   // Campo separado de momentum
   let momentum = null;
   if (velocity >= VEL_THRESHOLD) momentum = 'positive';
   else if (velocity <= -VEL_THRESHOLD) momentum = 'negative';
-  return { decision, total_score, velocity, momentum, breakdown, timestamp: new Date().toISOString() };
+  return { decision, total_score, velocity, momentum, zone: zone.tag, breakdown, timestamp: new Date().toISOString() };
 }
 
 // Novo endpoint /api/latest-decision
 app.get('/api/latest-decision', async (req, res) => {
   try {
     const result = macroEngine(global.currentMarketData || {});
+    // Enviar alerta para o Discord se a decisão mudou
+    if (result.decision && result.decision !== lastDiscordDecision) {
+        let emoji = '⏸️';
+        if (result.decision === 'BUY') emoji = '🟢⬆️';
+        if (result.decision === 'SELL') emoji = '🔴⬇️';
+        if (result.decision === 'HOLD') emoji = '⏸️';
+        sendDiscordAlert(result.decision, `${emoji} Novo sinal macro: ${result.decision} (score: ${result.total_score.toFixed(5)})`);
+        lastDiscordDecision = result.decision;
+    }
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.toString() });
@@ -1903,7 +2169,11 @@ function updateMacroMarketDataFromCandles() {
         if (tf.tf === '1H') tfMillis = 60 * 60 * 1000;
         if (tf.tf === '15m') tfMillis = 15 * 60 * 1000;
         // Logar os intervalos para debug
-        console.log(`[CANDLE][${idx.key}][${tf.tf}] prev: ts=${prevBar.timestamp}, start=${new Date(prevBar.timestamp).toISOString()}, end=${new Date(prevBar.timestamp + tfMillis - 1).toISOString()} | curr: ts=${currBar.timestamp}, start=${new Date(currBar.timestamp).toISOString()}, end=${new Date(currBar.timestamp + tfMillis - 1).toISOString()}`);
+        // console.log(`[CANDLE][${idx.key}][${tf.tf}] prev: ts=${prevBar.timestamp}, start=${new Date(prevBar.timestamp).toISOString()}, end=${new Date(prevBar.timestamp + tfMillis - 1).toISOString()} | curr: ts=${currBar.timestamp}, start=${new Date(currBar.timestamp).toISOString()}, end=${new Date(currBar.timestamp + tfMillis - 1).toISOString()}`);
+        // --- NOVO: log para comparar com TradingView ---
+        // console.log(
+        //   `[${tf.tf}] prev=${new Date(prevBar.timestamp).toISOString()}@${prevBar.close}  curr=${new Date(currBar.timestamp).toISOString()}@${currBar.close}`
+        // );
         global.currentMarketData[`${idx.key}_${tf.tf}`] = {
           close_now: currBar.close,
           close_prev: prevBar.close,
@@ -1925,9 +2195,9 @@ function updateMacroMarketDataFromCandles() {
     }
   }
   // LOG: mostrar conteúdo real dos buffers 1D para debug
-  console.log('candles1d["T10Y2Y"]:', candles1d['T10Y2Y']);
-  console.log('candles1d["HY_Spread"]:', candles1d['HY_Spread']);
-  console.log('candles1d["MOVE"]:', candles1d['MOVE']);
+  // console.log('candles1d["T10Y2Y"]:', candles1d['T10Y2Y']);
+  // console.log('candles1d["HY_Spread"]:', candles1d['HY_Spread']);
+  // console.log('candles1d["MOVE"]:', candles1d['MOVE']);
 }
 
 // Atualizar a cada 30 segundos
@@ -2096,7 +2366,6 @@ function isMarketGloballyOpen(now) {
 app.get('/api/market-status', (req, res) => {
     const now = new Date();
     const open = isMarketGloballyOpen(now);
-    console.log('[MARKET-STATUS] now:', now, 'open:', open);
     // Mercados especiais que seguem a regra global
     const SPECIAL_MARKETS = ["T10Y2Y", "HY Spread", "MOVE"];
     const MARKETS = [
@@ -2143,3 +2412,217 @@ setInterval(async () => {
         console.error('[Polling Binance] Erro ao atualizar funding/OI:', err.message);
     }
 }, 60000);
+
+// --- Endpoint para histórico de scalp_score/momentum ---
+app.get('/api/scalp-history', (req, res) => {
+    // period=1d, 7d, 1h, etc. Default: 1d (1440min)
+    let period = req.query.period || '1d';
+    let minutes = 1440;
+    if (period.endsWith('h')) minutes = parseInt(period) * 60;
+    else if (period.endsWith('d')) minutes = parseInt(period) * 1440;
+    else if (!isNaN(parseInt(period))) minutes = parseInt(period);
+    const history = loadScalpHistory(minutes);
+    res.json({ count: history.length, history });
+});
+
+// Fallback: consulta REST da mempool.space a cada 10s para grandes transações
+setInterval(async () => {
+    try {
+        const resp = await axios.get('https://mempool.space/api/mempool/recent');
+        for (const tx of resp.data) {
+            if (tx.value && tx.value > 1 * 1e8) {
+                console.log('[WhaleFlow REST] TX grande:', tx.txid, (tx.value / 1e8).toFixed(2), 'BTC');
+            }
+        }
+    } catch (e) {
+        console.error('[WhaleFlow REST] Erro:', e.message);
+    }
+}, 10000);
+
+// --- Endpoint para MT4 pegar a última ordem ---
+app.get('/api/mt4-order/latest', (req, res) => {
+    // Remover log de acesso ao endpoint
+    // const now = new Date().toISOString();
+    // const remoteIp = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+    // console.log(`[${now}] /api/mt4-order/latest accessed from ${remoteIp}`);
+    res.json(lastMt4Order);
+});
+
+// --- Novo endpoint para decisão de Day Trade BTCUSD ---
+app.get('/api/daytrade-decision', async (req, res) => {
+    // 1. Obter candles de 15m e 1h
+    const c15m = candles15m['BTC'] || [];
+    const c1h = candles1h['BTC'] || [];
+    // Funções auxiliares
+    function pctChange(now, prev) {
+        if (typeof now !== 'number' || typeof prev !== 'number' || prev === 0) return 0;
+        return (now / prev) - 1;
+    }
+    function avg(arr) {
+        if (!arr || arr.length === 0) return 0;
+        return arr.reduce((a, b) => a + b, 0) / arr.length;
+    }
+    // 2. Calcular indicadores principais
+    // --- 15m ---
+    let close_now_15m = 0, close_prev_15m = 0, pctPrice_15m = 0, vol_now_15m = 0, avgVol_15m = 0;
+    if (c15m.length >= 2) {
+        close_now_15m = c15m[c15m.length-1].close;
+        close_prev_15m = c15m[c15m.length-2].close;
+        pctPrice_15m = pctChange(close_now_15m, close_prev_15m);
+        vol_now_15m = c15m[c15m.length-1].volume;
+        avgVol_15m = avg(c15m.slice(-20).map(c => c.volume));
+    }
+    // --- 1h ---
+    let close_now_1h = 0, close_prev_1h = 0, pctPrice_1h = 0, vol_now_1h = 0, avgVol_1h = 0;
+    if (c1h.length >= 2) {
+        close_now_1h = c1h[c1h.length-1].close;
+        close_prev_1h = c1h[c1h.length-2].close;
+        pctPrice_1h = pctChange(close_now_1h, close_prev_1h);
+        vol_now_1h = c1h[c1h.length-1].volume;
+        avgVol_1h = avg(c1h.slice(-20).map(c => c.volume));
+    }
+    // --- ATR(14) 15m ---
+    function calcATR(candles, period = 14) {
+        if (candles.length < period + 1) return null;
+        let trs = [];
+        for (let i = candles.length - period; i < candles.length; i++) {
+            const c = candles[i];
+            const prev = candles[i - 1];
+            if (!c || !prev) continue;
+            const tr = Math.max(
+                c.high - c.low,
+                Math.abs(c.high - prev.close),
+                Math.abs(c.low - prev.close)
+            );
+            trs.push(tr);
+        }
+        if (trs.length < period) return null;
+        return trs.reduce((a, b) => a + b, 0) / trs.length;
+    }
+    const atr_15m = calcATR(c15m, 14);
+    // --- Tendência (EMA 20 vs EMA 50) ---
+    function calcEMA(arr, period) {
+        if (!arr || arr.length < period) return null;
+        let k = 2 / (period + 1);
+        let ema = arr[0];
+        for (let i = 1; i < arr.length; i++) {
+            ema = arr[i] * k + ema * (1 - k);
+        }
+        return ema;
+    }
+    let trend_15m = 'neutral', trend_1h = 'neutral';
+    if (c15m.length >= 50) {
+        const closes = c15m.map(c => c.close);
+        const ema20 = calcEMA(closes.slice(-50), 20);
+        const ema50 = calcEMA(closes.slice(-50), 50);
+        if (ema20 && ema50) {
+            if (ema20 > ema50) trend_15m = 'bullish';
+            else if (ema20 < ema50) trend_15m = 'bearish';
+        }
+    }
+    if (c1h.length >= 50) {
+        const closes = c1h.map(c => c.close);
+        const ema20 = calcEMA(closes.slice(-50), 20);
+        const ema50 = calcEMA(closes.slice(-50), 50);
+        if (ema20 && ema50) {
+            if (ema20 > ema50) trend_1h = 'bullish';
+            else if (ema20 < ema50) trend_1h = 'bearish';
+        }
+    }
+    // 3. Obter contexto macro
+    let macro_context = 'neutral';
+    try {
+        const macro = latestSignals.Overall?.trend || null;
+        if (macro === 'bullish') macro_context = 'bullish';
+        else if (macro === 'bearish') macro_context = 'bearish';
+    } catch {}
+    // 4. Aplicar filtros
+    let filters_debug = {
+        trend_15m: trend_15m !== 'neutral',
+        trend_1h: trend_1h !== 'neutral',
+        volume_15m: vol_now_15m > avgVol_15m,
+        volume_1h: vol_now_1h > avgVol_1h,
+        volatility: atr_15m !== null && atr_15m > 0,
+        macro: macro_context !== 'bearish',
+    };
+    let decision = 'HOLD';
+    let signal_strength = 'none';
+    let explanation = '';
+    // BUY
+    if (
+        trend_15m === 'bullish' &&
+        trend_1h === 'bullish' &&
+        vol_now_15m > avgVol_15m &&
+        vol_now_1h > avgVol_1h &&
+        atr_15m !== null && atr_15m > 0 &&
+        macro_context !== 'bearish'
+    ) {
+        decision = 'BUY';
+        signal_strength = 'strong';
+        explanation = 'Tendência de alta em 15m e 1h, volume acima da média, volatilidade saudável, macro favorável.';
+    }
+    // SELL
+    if (
+        trend_15m === 'bearish' &&
+        trend_1h === 'bearish' &&
+        vol_now_15m > avgVol_15m &&
+        vol_now_1h > avgVol_1h &&
+        atr_15m !== null && atr_15m > 0 &&
+        macro_context !== 'bullish'
+    ) {
+        decision = 'SELL';
+        signal_strength = 'strong';
+        explanation = 'Tendência de baixa em 15m e 1h, volume acima da média, volatilidade saudável, macro favorável.';
+    }
+    // 5. Definir entrada, stop e alvo
+    let entry_price = null, stop_loss = null, take_profit = null;
+    if (decision === 'BUY' || decision === 'SELL') {
+        entry_price = close_now_15m;
+        if (decision === 'BUY') {
+            stop_loss = entry_price - (atr_15m || 0);
+            take_profit = entry_price + 2 * (atr_15m || 0);
+        } else if (decision === 'SELL') {
+            stop_loss = entry_price + (atr_15m || 0);
+            take_profit = entry_price - 2 * (atr_15m || 0);
+        }
+    }
+    // 6. Montar resposta JSON
+    res.json({
+        decision,
+        signal_strength,
+        entry_price,
+        stop_loss,
+        take_profit,
+        timeframes: ['15m', '1h'],
+        trend_15m,
+        trend_1h,
+        atr_15m,
+        close_now_15m,
+        close_prev_15m,
+        pctPrice_15m,
+        vol_now_15m,
+        avgVol_15m,
+        close_now_1h,
+        close_prev_1h,
+        pctPrice_1h,
+        vol_now_1h,
+        avgVol_1h,
+        macro_context,
+        filters_debug,
+        explanation
+    });
+});
+
+// Controle dinâmico para filtro de confluência
+let isConfluenceEnabled = true;
+
+// Endpoint para obter status do filtro de confluência
+app.get('/api/config/confluence-status', (req, res) => {
+    res.json({ enabled: isConfluenceEnabled });
+});
+
+// Endpoint para alternar status do filtro de confluência
+app.post('/api/config/toggle-confluence', (req, res) => {
+    isConfluenceEnabled = !isConfluenceEnabled;
+    res.json({ enabled: isConfluenceEnabled });
+});

@@ -1133,9 +1133,20 @@
 
         <!-- Recommendation Banner -->
         <div style="display: flex; gap: 24px; align-items: stretch; margin-bottom: 32px;">
-            <div id="recommendation-banner" class="recommendation-banner status-hold" style="flex: 1;"> <!-- Start with Hold -->
+            <div id="recommendation-banner" class="recommendation-banner status-hold" style="flex: 1;">
                 <h2 id="final-decision-text">HOLD</h2>
                 <p id="final-explanation">Market is neutral, waiting for a stronger signal.</p>
+                <div style="display: flex; align-items: center; justify-content: center; gap: 18px; margin: 18px 0 8px 0;">
+                    <canvas id="global-gauge" width="110" height="110" style="max-width:110px;"></canvas>
+                    <div id="global-score-box" style="display: flex; flex-direction: column; align-items: flex-start; justify-content: center;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span id="global-score-value" style="font-size: 2.1rem; font-weight: 700; min-width: 90px; text-align: right;">0.00000</span>
+                            <span id="global-intensity-tag" style="font-size: 1.1rem; font-weight: 600; color: #aaa;">Neutral</span>
+                            <span id="global-momentum-arrow" style="font-size: 2rem; margin-left: 4px;"></span>
+                        </div>
+                        <canvas id="global-sparkline" width="120" height="32" style="margin-top: 6px;"></canvas>
+                    </div>
+                </div>
             </div>
             <!-- BTC Scalping Panel -->
             <div id="scalping-banner" class="recommendation-banner status-hold" style="flex: 1;"> <!-- Start with Hold -->
@@ -1260,11 +1271,13 @@
                     </div>
                 </div>
                 <div class="col-lg-6 mb-4">
-                    <div class="card h-100">
-                        <div class="card-header">Initial Decision Logic</div>
+                    <div class="card h-100 control-panel-card">
+                        <div class="card-header">Painel de Controle</div>
                         <div class="card-body">
-                            <p><strong>Decision:</strong> <span id="initial-decision">N/A</span></p>
-                            <p><small><strong>Reason:</strong> <span id="initial-explanation">N/A</span></small></p>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="toggle-confluence">
+                                <label class="form-check-label" for="toggle-confluence">Ativar Filtro de Confluência</label>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1721,7 +1734,7 @@
                     const messageData = JSON.parse(event.data);
                     if (messageData.type === 'full' && messageData.data) {
                         const signals = messageData.data;
-                        console.log('SSE signals:', signals); // DEBUG
+                        // console.log('SSE signals:', signals); // DEBUG
                         const grid = document.getElementById('signal-grid');
                         if (!grid) return;
 
@@ -1800,7 +1813,7 @@
                         let confirmed = false;
                         let validationExplanation = 'Validation could not be determined (missing data).';
                         if (btcData) {
-                            const safeChangePct = formatNumber(btcData.chg_pct, 2);
+                            const safeChangePct = formatNumber(btcData.chg_pct, 'chg_pct');
                             const btcTrend = btcData.trend;
 
                             if (initialDecision === 'BUY' && btcTrend === 'bullish') { confirmed = true; validationExplanation = `Confirmed BUY: Overall bullish & BTC bullish (${safeChangePct}%).`; }
@@ -2227,7 +2240,7 @@
             }
             
             // Update Basis
-            console.log('SSE BTC:', data.BTC); // DEBUG
+            // console.log('SSE BTC:', data.BTC); // DEBUG
             if (data.BTC && typeof data.BTC.basis_perc === 'number') {
                 const basisValue = document.getElementById('basis-value');
                 basisValue.textContent = data.BTC.basis_perc.toFixed(3) + '%';
@@ -2367,18 +2380,10 @@
             tagEl.style.color = zone.color;
             // --- Momentum Arrow ---
             let momentum = typeof data.momentum === 'number' ? data.momentum : 0;
-            if (momentum > 0.002) {
-                arrowEl.innerHTML = '▲';
-                arrowEl.style.color = '#2ecc71';
-                arrowEl.style.animation = 'pulse-arrow 1s infinite';
-            } else if (momentum < -0.002) {
-                arrowEl.innerHTML = '▼';
-                arrowEl.style.color = '#e74c3c';
-                arrowEl.style.animation = 'pulse-arrow 1s infinite';
-            } else {
-                arrowEl.innerHTML = '';
-                arrowEl.style.animation = '';
-            }
+            const mom = getMomentumLevel(momentum);
+            arrowEl.innerHTML = mom.icon;
+            arrowEl.style.color = mom.color;
+            arrowEl.style.animation = mom.anim ? 'pulse-arrow 1s infinite' : '';
             // --- Gauge Chart ---
             const gaugeCtx = document.getElementById('scalping-gauge').getContext('2d');
             const gaugeValue = Math.max(-0.01, Math.min(0.01, score));
@@ -2461,11 +2466,19 @@
         let scalpingSparklineChart = null;
 
         function getScalpingZone(score) {
-            if (score < -0.005) return { tag: 'Strong Sell', color: '#e74c3c' };
-            if (score < -0.001) return { tag: 'Sell', color: '#f39c12' };
-            if (score <= 0.001 && score >= -0.001) return { tag: 'Neutral', color: '#aaa' };
-            if (score <= 0.005) return { tag: 'Buy', color: '#2ecc71' };
-            return { tag: 'Strong Buy', color: '#198754' };
+            if (score < -0.005) return { tag: 'Strong Sell', color: '#e74c3c', chart: '#c0392b' };
+            if (score < -0.001) return { tag: 'Weak Sell', color: '#f39c12', chart: '#e67e22' };
+            if (score <= 0.001 && score >= -0.001) return { tag: 'Neutral', color: '#aaa', chart: '#666' };
+            if (score <= 0.005) return { tag: 'Weak Buy', color: '#2ecc71', chart: '#27ae60' };
+            return { tag: 'Strong Buy', color: '#198754', chart: '#145a32' };
+        }
+
+        function getMomentumLevel(momentum) {
+            if (momentum > 0.004) return { level: 'fast up', icon: '▲', color: '#2ecc71', anim: true };
+            if (momentum > 0.001) return { level: 'slow up', icon: '▲', color: '#2ecc71', anim: false };
+            if (momentum < -0.004) return { level: 'fast down', icon: '▼', color: '#e74c3c', anim: true };
+            if (momentum < -0.001) return { level: 'slow down', icon: '▼', color: '#e74c3c', anim: false };
+            return { level: 'flat', icon: '', color: '', anim: false };
         }
 
         function updateScalpingPanel(data) {
@@ -2496,18 +2509,10 @@
             tagEl.style.color = zone.color;
             // --- Momentum Arrow ---
             let momentum = typeof data.momentum === 'number' ? data.momentum : 0;
-            if (momentum > 0.002) {
-                arrowEl.innerHTML = '▲';
-                arrowEl.style.color = '#2ecc71';
-                arrowEl.style.animation = 'pulse-arrow 1s infinite';
-            } else if (momentum < -0.002) {
-                arrowEl.innerHTML = '▼';
-                arrowEl.style.color = '#e74c3c';
-                arrowEl.style.animation = 'pulse-arrow 1s infinite';
-            } else {
-                arrowEl.innerHTML = '';
-                arrowEl.style.animation = '';
-            }
+            const mom = getMomentumLevel(momentum);
+            arrowEl.innerHTML = mom.icon;
+            arrowEl.style.color = mom.color;
+            arrowEl.style.animation = mom.anim ? 'pulse-arrow 1s infinite' : '';
             // --- Gauge Chart ---
             const gaugeCtx = document.getElementById('scalping-gauge').getContext('2d');
             const gaugeValue = Math.max(-0.01, Math.min(0.01, score));
@@ -2519,7 +2524,7 @@
                     data: {
                         datasets: [{
                             data: [gaugePercent, 1-gaugePercent],
-                            backgroundColor: [gaugeColor, '#222'],
+                            backgroundColor: [gaugeColor, '#2c2323'],
                             borderWidth: 0,
                             cutout: '80%',
                             circumference: 180,
@@ -2534,7 +2539,7 @@
                 });
             } else {
                 scalpingGaugeChart.data.datasets[0].data = [gaugePercent, 1-gaugePercent];
-                scalpingGaugeChart.data.datasets[0].backgroundColor = [gaugeColor, '#222'];
+                scalpingGaugeChart.data.datasets[0].backgroundColor = [gaugeColor, '#2c2323'];
                 scalpingGaugeChart.update();
             }
             // --- Sparkline ---
@@ -2548,8 +2553,8 @@
                         labels: window.scalpingScoreHistory.map((_,i)=>i+1),
                         datasets: [{
                             data: window.scalpingScoreHistory,
-                            borderColor: '#0d6efd',
-                            backgroundColor: 'rgba(13,110,253,0.08)',
+                            borderColor: gaugeColor,
+                            backgroundColor: 'rgba(231,76,60,0.08)',
                             pointRadius: 0,
                             borderWidth: 2,
                             tension: 0.3,
@@ -2568,6 +2573,15 @@
             } else {
                 scalpingSparklineChart.data.labels = window.scalpingScoreHistory.map((_,i)=>i+1);
                 scalpingSparklineChart.data.datasets[0].data = window.scalpingScoreHistory;
+                scalpingSparklineChart.data.datasets[0].borderColor = gaugeColor;
+                // Fundo do sparkline acompanha a cor principal, mas mais suave
+                if (zone.tag.includes('Sell')) {
+                    scalpingSparklineChart.data.datasets[0].backgroundColor = 'rgba(231,76,60,0.08)';
+                } else if (zone.tag.includes('Buy')) {
+                    scalpingSparklineChart.data.datasets[0].backgroundColor = 'rgba(39,174,96,0.08)';
+                } else {
+                    scalpingSparklineChart.data.datasets[0].backgroundColor = 'rgba(160,160,160,0.08)';
+                }
                 scalpingSparklineChart.update();
             }
         }
@@ -2575,6 +2589,128 @@
         const style = document.createElement('style');
         style.innerHTML = `@keyframes pulse-arrow { 0%,100%{transform:scale(1);} 50%{transform:scale(1.25);} }`;
         document.head.appendChild(style);
+
+        // --- Buffer para sparkline global ---
+        window.globalScoreHistory = window.globalScoreHistory || [];
+        let globalGaugeChart = null;
+        let globalSparklineChart = null;
+
+        function getGlobalZone(score) {
+            if (score < -0.05) return { tag: 'Strong Sell', color: '#e74c3c', chart: '#c0392b' };
+            if (score < -0.01) return { tag: 'Weak Sell', color: '#f39c12', chart: '#e67e22' };
+            if (score <= 0.01 && score >= -0.01) return { tag: 'Neutral', color: '#aaa', chart: '#666' };
+            if (score <= 0.05) return { tag: 'Weak Buy', color: '#2ecc71', chart: '#27ae60' };
+            return { tag: 'Strong Buy', color: '#198754', chart: '#145a32' };
+        }
+
+        function getGlobalMomentumLevel(velocity) {
+            if (velocity > 0.04) return { level: 'fast up', icon: '▲', color: '#2ecc71', anim: true };
+            if (velocity > 0.01) return { level: 'slow up', icon: '▲', color: '#2ecc71', anim: false };
+            if (velocity < -0.04) return { level: 'fast down', icon: '▼', color: '#e74c3c', anim: true };
+            if (velocity < -0.01) return { level: 'slow down', icon: '▼', color: '#e74c3c', anim: false };
+            return { level: 'flat', icon: '', color: '', anim: false };
+        }
+
+        function updateGlobalPanel(data) {
+            const score = typeof data.total_score === 'number' ? data.total_score : 0;
+            const velocity = typeof data.velocity === 'number' ? data.velocity : 0;
+            // Atualiza buffer
+            window.globalScoreHistory.push(score);
+            if (window.globalScoreHistory.length > 20) window.globalScoreHistory.shift();
+            // Score
+            const scoreEl = document.getElementById('global-score-value');
+            if (scoreEl) scoreEl.textContent = score.toFixed(5);
+            // Tag
+            const tagEl = document.getElementById('global-intensity-tag');
+            const zone = getGlobalZone(score);
+            if (tagEl) { tagEl.textContent = zone.tag; tagEl.style.color = zone.color; }
+            // Seta
+            const arrowEl = document.getElementById('global-momentum-arrow');
+            const mom = getGlobalMomentumLevel(velocity);
+            if (arrowEl) {
+                arrowEl.innerHTML = mom.icon;
+                arrowEl.style.color = mom.color;
+                arrowEl.style.animation = mom.anim ? 'pulse-arrow 1s infinite' : '';
+            }
+            // Gauge
+            const gaugeCtx = document.getElementById('global-gauge').getContext('2d');
+            const gaugeValue = Math.max(-0.1, Math.min(0.1, score));
+            const gaugePercent = (gaugeValue + 0.1) / 0.2; // 0 to 1
+            const gaugeColor = zone.color;
+            if (!globalGaugeChart) {
+                globalGaugeChart = new Chart(gaugeCtx, {
+                    type: 'doughnut',
+                    data: {
+                        datasets: [{
+                            data: [gaugePercent, 1-gaugePercent],
+                            backgroundColor: [gaugeColor, '#222'],
+                            borderWidth: 0,
+                            cutout: '80%',
+                            circumference: 180,
+                            rotation: 270
+                        }]
+                    },
+                    options: {
+                        responsive: false,
+                        plugins: { legend: { display: false } },
+                        tooltips: { enabled: false },
+                    }
+                });
+            } else {
+                globalGaugeChart.data.datasets[0].data = [gaugePercent, 1-gaugePercent];
+                globalGaugeChart.data.datasets[0].backgroundColor = [gaugeColor, '#222'];
+                globalGaugeChart.update();
+            }
+            // Sparkline
+            const sparkCtx = document.getElementById('global-sparkline').getContext('2d');
+            if (!globalSparklineChart) {
+                globalSparklineChart = new Chart(sparkCtx, {
+                    type: 'line',
+                    data: {
+                        labels: window.globalScoreHistory.map((_,i)=>i+1),
+                        datasets: [{
+                            data: window.globalScoreHistory,
+                            borderColor: gaugeColor,
+                            backgroundColor: 'rgba(13,110,253,0.08)',
+                            pointRadius: 0,
+                            borderWidth: 2,
+                            tension: 0.3,
+                            fill: true
+                        }]
+                    },
+                    options: {
+                        responsive: false,
+                        plugins: { legend: { display: false }, tooltip: { enabled: false } },
+                        scales: {
+                            x: { display: false },
+                            y: { display: false, min: -0.1, max: 0.1 }
+                        }
+                    }
+                });
+            } else {
+                globalSparklineChart.data.labels = window.globalScoreHistory.map((_,i)=>i+1);
+                globalSparklineChart.data.datasets[0].data = window.globalScoreHistory;
+                globalSparklineChart.data.datasets[0].borderColor = gaugeColor;
+                if (zone.tag.includes('Sell')) {
+                    globalSparklineChart.data.datasets[0].backgroundColor = 'rgba(231,76,60,0.08)';
+                } else if (zone.tag.includes('Buy')) {
+                    globalSparklineChart.data.datasets[0].backgroundColor = 'rgba(39,174,96,0.08)';
+                } else {
+                    globalSparklineChart.data.datasets[0].backgroundColor = 'rgba(160,160,160,0.08)';
+                }
+                globalSparklineChart.update();
+            }
+        }
+        // --- Atualização periódica do painel global ---
+        async function fetchAndUpdateGlobalPanel() {
+            try {
+                const res = await fetch('/api/latest-decision');
+                const data = await res.json();
+                updateGlobalPanel(data);
+            } catch (e) {}
+        }
+        setInterval(fetchAndUpdateGlobalPanel, 3000);
+        fetchAndUpdateGlobalPanel();
     </script>
     <script>
 (function(){
@@ -2640,5 +2776,27 @@
   });
 })();
 </script>
+    <!-- Script para controlar toggle do filtro de confluência -->
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const toggle = document.getElementById('toggle-confluence');
+        if (!toggle) return;
+        // Carrega estado atual do filtro
+        fetch('/api/config/confluence-status')
+            .then(resp => resp.json())
+            .then(data => {
+                toggle.checked = data.enabled;
+            });
+        // Ao alterar checkbox, chama endpoint para alternar estado
+        toggle.addEventListener('change', () => {
+            fetch('/api/config/toggle-confluence', { method: 'POST' })
+                .then(resp => resp.json())
+                .then(data => {
+                    toggle.checked = data.enabled;
+                    console.log('confluence_enabled agora', data.enabled);
+                });
+        });
+    });
+    </script>
 </body>
 </html> 

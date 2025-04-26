@@ -32,3 +32,9 @@ dist/
 # Project specific
 analysis.py;market_signals.py
 btc_analysis_results.json 
+node_modules/
+state.json
+scalp_history.json
+node-v22.15.0-x64.msi
+BTCUSDT-15m-2025-04-20.zip
+
